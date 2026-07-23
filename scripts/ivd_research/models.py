@@ -139,8 +139,11 @@ class EvidenceCard(BaseModel):
 class ManualCollectionState(BaseModel):
     phase: str = "not_started"
     plan_path: str = ""
+    plan_sha256: str = ""
     search_record_path: str = ""
+    search_record_sha256: str = ""
     manifest_path: str = ""
+    manifest_sha256: str = ""
     required_attempt_ids: list[str] = Field(default_factory=list)
     recorded_attempt_ids: list[str] = Field(default_factory=list)
     validated_attempt_ids: list[str] = Field(default_factory=list)

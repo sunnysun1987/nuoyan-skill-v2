@@ -113,13 +113,15 @@ git commit -m "feat: add NMPA manual search plans"
 
 **Files:**
 - Modify: `scripts/ivd_research/nmpa_manual.py`
+- Create: `scripts/ivd_research/nmpa_manual_contract.py`
+- Create: `scripts/ivd_research/nmpa_manual_materials.py`
 - Test: `scripts/tests/test_nmpa_manual.py`
 
 **Interfaces:**
 - Produces: `record_nmpa_manual_search(task_dir: Path, record_path: Path) -> dict[str, Any]` and `import_nmpa_manual(task_dir: Path, manifest_path: Path) -> dict[str, Any]`.
 - Consumes: `record_materials`, `find_duplicate_material`, `next_material_id`, `generate_draft_evidence_cards`, `DownloadFile`, and `Material`.
 
-- [ ] **Step 1: Write failing workflow tests**
+- [x] **Step 1: Write failing workflow tests**
 
 ```python
 def test_record_search_sets_awaiting_import_without_closing_source(tmp_path):
@@ -163,11 +165,11 @@ def test_result_import_creates_traceable_material_and_card(tmp_path):
 
 Also cover partial attempts, idempotent duplicate imports, mismatched task IDs, non-NMPA URLs, forbidden credential keys, missing files, result-count mismatch, and incomplete optional fields.
 
-- [ ] **Step 2: Run tests and confirm RED**
+- [x] **Step 2: Run tests and confirm RED**
 
 Run: `python3 -m pytest -q scripts/tests/test_nmpa_manual.py -k "record or zero or import or credential or duplicate"`
 
-- [ ] **Step 3: Implement validation and import**
+- [x] **Step 3: Implement validation and import**
 
 The record schema requires exact plan attempt IDs, queries, registration types, search time, official NMPA URL, non-negative result count, and `operator_confirmed=true`. Recording never creates materials or closes the scenario.
 
@@ -186,11 +188,11 @@ else:
     status, phase = "completed", "completed"
 ```
 
-- [ ] **Step 4: Run focused tests and confirm GREEN**
+- [x] **Step 4: Run focused tests and confirm GREEN**
 
 Run: `python3 -m pytest -q scripts/tests/test_nmpa_manual.py`
 
-- [ ] **Step 5: Commit task 2**
+- [x] **Step 5: Commit task 2**
 
 ```bash
 git add scripts/ivd_research/nmpa_manual.py scripts/tests/test_nmpa_manual.py
