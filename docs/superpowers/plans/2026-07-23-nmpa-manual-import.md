@@ -30,7 +30,7 @@
 - Produces: `ManualCollectionState`, `prepare_nmpa_manual_plan(task_dir: Path) -> dict[str, Any]`, and `collect(task_id, task_dir, params) -> ScenarioResult`.
 - Consumes: `scenario_query_plans(state)`, `load_task`, `save_task`, `write_json`, and the NMPA source-site URL.
 
-- [ ] **Step 1: Write failing plan-generation tests**
+- [x] **Step 1: Write failing plan-generation tests**
 
 ```python
 def test_prepare_nmpa_manual_plan_sets_awaiting_user_search(tmp_path):
@@ -54,13 +54,13 @@ def test_standard_nmpa_collector_returns_manual_plan_without_materials(tmp_path)
     assert "人工" in result.message_zh
 ```
 
-- [ ] **Step 2: Run tests and confirm RED**
+- [x] **Step 2: Run tests and confirm RED**
 
 Run: `python3 -m pytest -q scripts/tests/test_nmpa_manual.py -k "prepare or collector"`
 
 Expected: import/attribute failures because the module and nested state do not exist.
 
-- [ ] **Step 3: Implement state and plan generation**
+- [x] **Step 3: Implement state and plan generation**
 
 ```python
 class ManualCollectionState(BaseModel):
@@ -96,11 +96,11 @@ class ScenarioStatus(BaseModel):
 
 It updates the NMPA status to `needs_manual_review` and phase to `awaiting_user_search`. Domestic-only and import-only wording in `competitor_scope` narrows registration categories; otherwise both categories are included.
 
-- [ ] **Step 4: Run focused tests and confirm GREEN**
+- [x] **Step 4: Run focused tests and confirm GREEN**
 
 Run: `python3 -m pytest -q scripts/tests/test_nmpa_manual.py -k "prepare or collector"`
 
-- [ ] **Step 5: Commit task 1**
+- [x] **Step 5: Commit task 1**
 
 ```bash
 git add scripts/ivd_research/models.py scripts/ivd_research/nmpa_manual.py scripts/tests/test_nmpa_manual.py

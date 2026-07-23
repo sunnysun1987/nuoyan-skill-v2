@@ -136,6 +136,20 @@ class EvidenceCard(BaseModel):
         )
 
 
+class ManualCollectionState(BaseModel):
+    phase: str = "not_started"
+    plan_path: str = ""
+    search_record_path: str = ""
+    manifest_path: str = ""
+    required_attempt_ids: list[str] = Field(default_factory=list)
+    recorded_attempt_ids: list[str] = Field(default_factory=list)
+    validated_attempt_ids: list[str] = Field(default_factory=list)
+    imported_material_ids: list[str] = Field(default_factory=list)
+    observed_result_count: int = 0
+    zero_results_verified: bool = False
+    last_updated: str = ""
+
+
 class ScenarioStatus(BaseModel):
     scenario_id: str
     label_zh: str
@@ -143,6 +157,7 @@ class ScenarioStatus(BaseModel):
     material_count: int = 0
     failure_count: int = 0
     last_message: str = ""
+    manual_collection: ManualCollectionState | None = None
 
 
 class LiteratureRecord(BaseModel):
