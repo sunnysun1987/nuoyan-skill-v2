@@ -460,6 +460,24 @@ def test_rehashed_invalid_nmpa_evidence_format_still_blocks_verified_zero_result
     assert any("NMPA" in warning and "格式" in warning for warning in warnings)
 
 
+def test_malformed_nmpa_artifact_fails_closed_without_crashing(tmp_path: Path):
+    task_dir = _task_dir(tmp_path)
+    task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+    _mark_nmpa_verified_zero(task_dir, task)
+    manual = task["scenario_statuses"]["nmpa_competitor"]["manual_collection"]
+    plan_path = task_dir / manual["plan_path"]
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    plan["attempts"] = ["broken-attempt"]
+    write_json(plan_path, plan)
+    manual["plan_sha256"] = hashlib.sha256(plan_path.read_bytes()).hexdigest()
+    manual["observed_result_count"] = "not-an-integer"
+    write_json(task_dir / "task.json", task)
+
+    warnings = scenario_coverage_warnings(task_dir)
+
+    assert any("NMPA" in warning and "无效" in warning for warning in warnings)
+
+
 def test_life_science_requirement_detects_ad_without_lead_false_positive():
     assert requires_life_science_research(
         {

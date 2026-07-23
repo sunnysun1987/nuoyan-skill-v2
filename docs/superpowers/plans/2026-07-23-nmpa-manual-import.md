@@ -360,7 +360,7 @@ git commit -m "docs: define NMPA manual evidence gate"
 **Interfaces:**
 - Produces a tested feature branch ready for external audit; does not merge, tag, or release without user approval.
 
-- [ ] **Step 1: Run the complete deterministic suite**
+- [x] **Step 1: Run the complete deterministic suite**
 
 ```bash
 python3 -m pytest -q
@@ -372,11 +372,11 @@ nuoyan doctor --output-root /private/tmp/nuoyan-nmpa-manual-doctor --json
 
 Expected: all tests pass, Ruff and compileall exit 0, diff check is clean, and doctor reports `ok=true` with only optional capability warnings allowed.
 
-- [ ] **Step 2: Run a local CLI acceptance flow**
+- [x] **Step 2: Run a local CLI acceptance flow**
 
 Create a temporary confirmed task, run `nmpa-manual-plan`, record a partial search, verify the scenario remains open, then import an evidence-backed zero-result or positive manifest and verify materials/cards/status. Do not access NMPA automatically.
 
-- [ ] **Step 3: Review the final diff against the three approved rules**
+- [x] **Step 3: Review the final diff against the three approved rules**
 
 Confirm:
 
@@ -384,13 +384,24 @@ Confirm:
 2. Zero results require a structured record plus visible evidence.
 3. Completion requires every attempt in the confirmed plan.
 
-- [ ] **Step 4: Commit any final documentation/test corrections**
+- [x] **Step 4: Commit any final documentation/test corrections**
 
 ```bash
 git add SKILL.md README.md references scripts/ivd_research scripts/tests docs/superpowers/plans/2026-07-23-nmpa-manual-import.md
 git commit -m "test: verify NMPA manual import closure"
 ```
 
-- [ ] **Step 5: Hand off for review**
+- [x] **Step 5: Hand off for review**
 
 Report branch name, commits, exact tests, current limitations, and the local acceptance task. Keep `main` and `v2.1.11` unchanged.
+
+## Verification Evidence
+
+- Deterministic suite: `172 passed, 1 skipped`.
+- NMPA-focused suite: `40 passed, 20 deselected`.
+- Ruff, `compileall`, and `git diff --check`: passed.
+- Source-tree doctor: `ok=true`; OCR is the only unavailable optional capability.
+- CLI acceptance: `test_nmpa_manual_cli_commands_complete_verified_zero_flow` verifies plan generation, partial search remaining `awaiting_user_search`, complete search moving to `awaiting_import`, and evidence-backed zero-result closure.
+- Positive acceptance: `test_result_import_creates_traceable_material_and_card` verifies dedicated NMPA material/card persistence and package-gate acceptance.
+- No live NMPA request was made; this is intentional for the approved human-assisted standard path.
+- The machine-wide `/Library/Frameworks/Python.framework/Versions/3.14/bin/nuoyan` still resolves to an older installed skill. Audit commands used the current branch through `PYTHONPATH=<repo>/scripts python3 -m ivd_research.cli`; installation synchronization is deferred until review approval.

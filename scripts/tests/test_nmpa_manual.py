@@ -277,6 +277,25 @@ def test_nmpa_manual_cli_commands_complete_verified_zero_flow(tmp_path: Path):
     plan_result = runner.invoke(app, ["nmpa-manual-plan", *common])
     assert plan_result.exit_code == 0
     plan = read_json(task_dir / "manual" / "nmpa" / "search_plan.json")
+    first_attempt_id = plan["attempts"][0]["attempt_id"]
+    partial_record_path = write_search_record(
+        task_dir,
+        plan,
+        attempt_ids={first_attempt_id},
+    )
+
+    partial_result = runner.invoke(
+        app,
+        [
+            "record-nmpa-manual-search",
+            *common,
+            "--record",
+            str(partial_record_path),
+        ],
+    )
+    assert partial_result.exit_code == 0
+    assert "awaiting_user_search" in partial_result.stdout
+
     record_path = write_search_record(task_dir, plan)
 
     record_result = runner.invoke(

@@ -70,6 +70,8 @@ def record_nmpa_manual_search(task_dir: Path, record_path: Path) -> dict[str, An
     task_dir = Path(task_dir)
     record_path = Path(record_path)
     payload = read_json(record_path)
+    if not isinstance(payload, dict):
+        raise ValueError("NMPA search record 必须是 JSON 对象。")
     _reject_sensitive_fields(payload)
     state = load_task(task_dir)
     _validate_task_id(payload, state.task_id)
@@ -109,10 +111,18 @@ def record_nmpa_manual_search(task_dir: Path, record_path: Path) -> dict[str, An
         ):
             raise ValueError("已保存的 NMPA 检索记录校验值不一致，请新建检索会话。")
         existing = read_json(persisted_path)
+        if not isinstance(existing, dict):
+            raise ValueError("已保存的 NMPA 检索记录结构无效。")
         if str(existing.get("search_session_id") or "") != session_id:
             raise ValueError("search_session_id 与已保存的检索记录不一致。")
+    existing_attempt_list = existing.get("attempts", [])
+    if not isinstance(existing_attempt_list, list) or any(
+        not isinstance(item, dict) or not item.get("attempt_id")
+        for item in existing_attempt_list
+    ):
+        raise ValueError("已保存的 NMPA 检索记录 attempts 结构无效。")
     existing_attempts = {
-        str(item["attempt_id"]): item for item in existing.get("attempts", [])
+        str(item["attempt_id"]): item for item in existing_attempt_list
     }
     changed_ids = [
         item["attempt_id"]
@@ -161,9 +171,16 @@ def record_nmpa_manual_search(task_dir: Path, record_path: Path) -> dict[str, An
             saved_manifest_path = task_dir / manual.manifest_path
             if saved_manifest_path.exists():
                 saved_manifest = read_json(saved_manifest_path)
+                if not isinstance(saved_manifest, dict):
+                    raise ValueError("已保存的 NMPA 导入清单结构无效。")
+                saved_attempts = saved_manifest.get("attempts", [])
+                if not isinstance(saved_attempts, list) or any(
+                    not isinstance(item, dict) for item in saved_attempts
+                ):
+                    raise ValueError("已保存的 NMPA 导入清单 attempts 结构无效。")
                 saved_manifest["attempts"] = [
                     item
-                    for item in saved_manifest.get("attempts", [])
+                    for item in saved_attempts
                     if str(item.get("attempt_id") or "") not in changed_set
                 ]
                 saved_manifest["updated_at"] = now_iso()
@@ -246,6 +263,8 @@ def import_nmpa_manual(task_dir: Path, manifest_path: Path) -> dict[str, Any]:
     task_dir = Path(task_dir)
     manifest_path = Path(manifest_path)
     payload = read_json(manifest_path)
+    if not isinstance(payload, dict):
+        raise ValueError("NMPA import manifest 必须是 JSON 对象。")
     _reject_sensitive_fields(payload)
     state = load_task(task_dir)
     _validate_task_id(payload, state.task_id)
@@ -269,6 +288,8 @@ def import_nmpa_manual(task_dir: Path, manifest_path: Path) -> dict[str, Any]:
     ):
         raise ValueError("已保存的 NMPA 检索记录校验值不一致，请重新记录检索。")
     search_record = read_json(search_record_path)
+    if not isinstance(search_record, dict):
+        raise ValueError("已保存的 NMPA 检索记录结构无效。")
     _reject_sensitive_fields(search_record)
     _validate_task_id(search_record, state.task_id)
     if search_record.get("operator_confirmed") is not True:
@@ -321,6 +342,8 @@ def import_nmpa_manual(task_dir: Path, manifest_path: Path) -> dict[str, Any]:
         ):
             raise ValueError("已保存的 NMPA 导入清单校验值不一致。")
         existing_manifest = read_json(persisted_manifest_path)
+        if not isinstance(existing_manifest, dict):
+            raise ValueError("已保存的 NMPA 导入清单结构无效。")
         _reject_sensitive_fields(existing_manifest)
         _validate_task_id(existing_manifest, state.task_id)
         if str(existing_manifest.get("search_session_id") or "") != session_id:
@@ -365,9 +388,14 @@ def import_nmpa_manual(task_dir: Path, manifest_path: Path) -> dict[str, Any]:
             material_ids.append(material_id)
             new_material_count += int(created)
 
+    existing_manifest_attempts = existing_manifest.get("attempts", [])
+    if not isinstance(existing_manifest_attempts, list) or any(
+        not isinstance(item, dict) or not item.get("attempt_id")
+        for item in existing_manifest_attempts
+    ):
+        raise ValueError("已保存的 NMPA 导入清单 attempts 结构无效。")
     merged_attempts = {
-        str(item["attempt_id"]): item
-        for item in existing_manifest.get("attempts", [])
+        str(item["attempt_id"]): item for item in existing_manifest_attempts
     }
     merged_attempts.update(
         {item["attempt_id"]: item for item in normalized_manifest_attempts}
@@ -582,6 +610,8 @@ def prepare_nmpa_manual_plan(task_dir: Path) -> dict[str, Any]:
 
     plan_path = task_dir / PLAN_PATH
     previous_plan = read_json(plan_path) if plan_path.exists() else {}
+    if not isinstance(previous_plan, dict):
+        previous_plan = {}
     generated_at = now_iso()
     plan = {
         "schema_version": "1.0",
