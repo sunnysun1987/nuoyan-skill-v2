@@ -1,3 +1,4 @@
+import hashlib
 import json
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from ivd_research.models import Material
 from ivd_research.package import (
     build_standard_delivery,
     requires_life_science_research,
+    scenario_coverage_warnings,
     verify_package,
 )
 from ivd_research.project_profile import formal_scenarios_for
@@ -154,6 +156,100 @@ def _write_hcg_material_and_card(task_dir: Path) -> None:
     export_evidence_card_files(task_dir, card_payload)
 
 
+def _mark_nmpa_verified_zero(task_dir: Path, task: dict) -> None:
+    attempt_id = "NMPA-TEST-001"
+    plan_path = task_dir / "manual" / "nmpa" / "search_plan.json"
+    record_path = task_dir / "manual" / "nmpa" / "search_records" / "TEST.json"
+    manifest_path = task_dir / "manual" / "nmpa" / "import_manifests" / "TEST.json"
+    evidence_path = (
+        task_dir
+        / "downloads"
+        / "competitors"
+        / "nmpa_manual"
+        / "TEST"
+        / attempt_id
+        / "001_zero-result.png"
+    )
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_bytes(b"\x89PNG\r\n\x1a\nverified zero result")
+    evidence_sha256 = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+    official_url = (
+        "https://www.nmpa.gov.cn/datasearch/home-index.html#category=ylqx"
+    )
+    write_json(
+        plan_path,
+        {
+            "task_id": task["task_id"],
+            "attempts": [
+                {
+                    "attempt_id": attempt_id,
+                    "query": "p-tau217",
+                    "registration_type": "境内医疗器械（注册）",
+                    "official_search_url": official_url,
+                }
+            ],
+        },
+    )
+    write_json(
+        record_path,
+        {
+            "task_id": task["task_id"],
+            "search_session_id": "TEST",
+            "operator_confirmed": True,
+            "attempts": [
+                {
+                    "attempt_id": attempt_id,
+                    "query": "p-tau217",
+                    "registration_type": "境内医疗器械（注册）",
+                    "official_search_url": official_url,
+                    "search_time": "2026-07-23T10:00:00+08:00",
+                    "result_count": 0,
+                }
+            ],
+        },
+    )
+    write_json(
+        manifest_path,
+        {
+            "task_id": task["task_id"],
+            "search_session_id": "TEST",
+            "capture_complete": True,
+            "attempts": [
+                {
+                    "attempt_id": attempt_id,
+                    "evidence_files": [
+                        {
+                            "relative_path": evidence_path.relative_to(task_dir).as_posix(),
+                            "sha256": evidence_sha256,
+                            "status": "imported",
+                        }
+                    ],
+                    "results": [],
+                }
+            ],
+        },
+    )
+    scenario = task["scenario_statuses"]["nmpa_competitor"]
+    scenario["status"] = "no_results"
+    scenario["last_message"] = "离线测试：NMPA 零结果已完成人工证据核验。"
+    scenario["manual_collection"] = {
+        "phase": "verified_no_results",
+        "plan_path": plan_path.relative_to(task_dir).as_posix(),
+        "plan_sha256": hashlib.sha256(plan_path.read_bytes()).hexdigest(),
+        "search_record_path": record_path.relative_to(task_dir).as_posix(),
+        "search_record_sha256": hashlib.sha256(record_path.read_bytes()).hexdigest(),
+        "manifest_path": manifest_path.relative_to(task_dir).as_posix(),
+        "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        "required_attempt_ids": [attempt_id],
+        "recorded_attempt_ids": [attempt_id],
+        "validated_attempt_ids": [attempt_id],
+        "imported_material_ids": [],
+        "observed_result_count": 0,
+        "zero_results_verified": True,
+        "last_updated": "2026-07-23T10:01:00+08:00",
+    }
+
+
 def _mark_formal_scenarios(task_dir: Path, status: str = "no_results") -> None:
     task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
     for scenario_id in formal_scenarios_for(task):
@@ -161,6 +257,8 @@ def _mark_formal_scenarios(task_dir: Path, status: str = "no_results") -> None:
         task["scenario_statuses"][scenario_id]["last_message"] = "离线测试：已记录明确状态。"
     task["scenario_statuses"]["pubmed_literature"]["status"] = "completed"
     task["scenario_statuses"]["pubmed_literature"]["material_count"] = 1
+    if status == "no_results":
+        _mark_nmpa_verified_zero(task_dir, task)
     write_json(task_dir / "task.json", task)
     query_attempts = {
         "cmde_regulatory": [
@@ -264,6 +362,102 @@ def test_verify_package_keeps_incomplete_scope_as_not_business_ready(tmp_path: P
     assert result["business_ready"] is False
     assert "task_info" in result["missing_confirmations"]
     assert result["final_review_ready"] is False
+
+
+def test_unverified_nmpa_no_results_blocks_scenario_coverage(tmp_path: Path):
+    task_dir = _task_dir(tmp_path)
+    task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+    scenario = task["scenario_statuses"]["nmpa_competitor"]
+    scenario["status"] = "no_results"
+    scenario["last_message"] = "人工声称无结果，但未提交证据。"
+    write_json(task_dir / "task.json", task)
+
+    warnings = scenario_coverage_warnings(task_dir)
+
+    assert any("NMPA" in warning and "未经人工证据核验" in warning for warning in warnings)
+
+
+def test_nmpa_completed_without_dedicated_manifest_blocks_coverage(tmp_path: Path):
+    task_dir = _task_dir(tmp_path)
+    task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+    scenario = task["scenario_statuses"]["nmpa_competitor"]
+    scenario["status"] = "completed"
+    scenario["material_count"] = 1
+    scenario["last_message"] = "通过通用 import-finding 导入一条线索。"
+    write_json(task_dir / "task.json", task)
+
+    warnings = scenario_coverage_warnings(task_dir)
+
+    assert any("NMPA" in warning and "专用人工导入" in warning for warning in warnings)
+
+
+def test_verified_nmpa_zero_results_satisfies_source_coverage(tmp_path: Path):
+    task_dir = _task_dir(tmp_path)
+    task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+    _mark_nmpa_verified_zero(task_dir, task)
+    write_json(task_dir / "task.json", task)
+
+    warnings = scenario_coverage_warnings(task_dir)
+
+    assert not any("NMPA" in warning for warning in warnings)
+
+
+def test_tampered_nmpa_evidence_blocks_verified_zero_results(tmp_path: Path):
+    task_dir = _task_dir(tmp_path)
+    task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+    _mark_nmpa_verified_zero(task_dir, task)
+    write_json(task_dir / "task.json", task)
+    manual = task["scenario_statuses"]["nmpa_competitor"]["manual_collection"]
+    manifest = json.loads((task_dir / manual["manifest_path"]).read_text(encoding="utf-8"))
+    evidence_path = task_dir / manifest["attempts"][0]["evidence_files"][0][
+        "relative_path"
+    ]
+    evidence_path.write_bytes(b"tampered")
+
+    warnings = scenario_coverage_warnings(task_dir)
+
+    assert any("NMPA" in warning and "校验值" in warning for warning in warnings)
+
+
+def test_rehashed_nmpa_record_mismatch_still_blocks_verified_zero_results(
+    tmp_path: Path,
+):
+    task_dir = _task_dir(tmp_path)
+    task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+    _mark_nmpa_verified_zero(task_dir, task)
+    manual = task["scenario_statuses"]["nmpa_competitor"]["manual_collection"]
+    record_path = task_dir / manual["search_record_path"]
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    record["attempts"][0]["query"] = "与检索计划不一致的查询"
+    write_json(record_path, record)
+    manual["search_record_sha256"] = hashlib.sha256(record_path.read_bytes()).hexdigest()
+    write_json(task_dir / "task.json", task)
+
+    warnings = scenario_coverage_warnings(task_dir)
+
+    assert any("NMPA" in warning and "检索计划不一致" in warning for warning in warnings)
+
+
+def test_rehashed_invalid_nmpa_evidence_format_still_blocks_verified_zero_results(
+    tmp_path: Path,
+):
+    task_dir = _task_dir(tmp_path)
+    task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+    _mark_nmpa_verified_zero(task_dir, task)
+    manual = task["scenario_statuses"]["nmpa_competitor"]["manual_collection"]
+    manifest_path = task_dir / manual["manifest_path"]
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    evidence = manifest["attempts"][0]["evidence_files"][0]
+    evidence_path = task_dir / evidence["relative_path"]
+    evidence_path.write_bytes(b"not a png")
+    evidence["sha256"] = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+    write_json(manifest_path, manifest)
+    manual["manifest_sha256"] = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    write_json(task_dir / "task.json", task)
+
+    warnings = scenario_coverage_warnings(task_dir)
+
+    assert any("NMPA" in warning and "格式" in warning for warning in warnings)
 
 
 def test_life_science_requirement_detects_ad_without_lead_false_positive():

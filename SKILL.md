@@ -20,7 +20,7 @@ description: 用于 IVD 企业研发人员开展研发项目调研，组织调�
 - 不得绕过验证码、登录、付费墙、访问控制或网站服务条款。遇到受限资料时，如实说明限制，并请求用户提供合法取得的文件或链接。
 - CLI 只给 agent 使用，不面向非 IT 用户。不要让业务用户直接操作命令行。
 - Codex Chrome 用于站点探索、登录态页面观察、验证码/权限限制确认和失败诊断；观察结果必须通过 `record-site-observation` 记录，后续沉淀为站点 adapter 或 site profile。不要让 Codex 每次自由点击网页来替代稳定 CLI。
-- 当 HTTP/API adapter 无法覆盖真实网站流程时，使用 Playwright 持久化浏览器会话执行固定页面 workflow。登录、Cloudflare 真人验证或机构认证必须由用户在可见浏览器中合法完成，agent 只读取登录后合法可见内容。
+- 当 HTTP/API adapter 无法覆盖真实网站流程时，可以使用 Playwright 持久化浏览器会话执行固定页面 workflow；已定义人工辅助流程的来源除外。登录、Cloudflare 真人验证或机构认证必须由用户在可见浏览器中合法完成，agent 只读取登录后合法可见内容。
 - 遇到 DNS、HTTP 429、连接失败、页面结构变化、登录态、验证码、权限或下载失败时，不得直接跳过来源场景。必须记录真实失败状态，并执行兜底链路：缩短/改写检索式重试、官方/公开网页检索后用 `import-finding` 导入、浏览器 workflow 观察并记录、请求用户提供合法材料。所有兜底动作或阻塞原因都必须进入报告“缺口与任务”和 Excel 补证表。
 - 无结果或命中偏少时必须分层重试，不得以单个宽检索式结束；场景状态记录全部检索层级。
 - 中文来源先用检测项目/靶标核心词；NMPA 和专利再追加产品提示与短方法学提示。
@@ -28,7 +28,7 @@ description: 用于 IVD 企业研发人员开展研发项目调研，组织调�
 - `no_results` 不是最终事实，只是某一来源、某一检索策略下的状态。标准交付必须运行或自动生成采集质量审计：检查是否存在单一检索式判空、缺少核心词层级、检索词过长、OpenAlex 与 PubMed/PMC/LSR 互相矛盾等假阴性风险。存在高风险疑似假阴性时，HTML 报告“资料缺口”、Excel“采集异常”和 `verify-package` 必须显式提示，并使 `business_ready=false`。
 - 已确认的项目画像是项目身份、目标物标签、报告通用分析和知识索引的唯一优先依据。材料题名只能在旧任务缺少确认画像时兜底，不得因材料池混入其他疾病、方法学或多重检测文献而改写当前项目类型；新增检测项目不得通过增加 analyte 专属排除词来修复污染。
 - NMPA 和专利等产品型来源必须使用目标物核心词、产品提示词和短方法学提示的分层检索计划；禁止把样本、平台、用途、同义词和完整范围说明拼成单个超长检索式。中华医学期刊跨刊检索优先使用公开检索接口保存题录与摘要，前端只返回 loading shell 时不得判为 `no_results`。
-- Edge 缺失不得直接作为浏览器类场景的终点。除站点明确只能由 Edge/CDP 完成外，必须自动降级到 Playwright Chromium 或固定 DOM workflow；NMPA 应先尝试 HTTP/API，再尝试 Edge CDP，Edge 不可用时再尝试 Playwright DOM 兜底。只有 Playwright 也不可用、登录/验证码/权限限制或站点策略阻断时，才记录为 `needs_manual_review`、`needs_login` 或 `permission_required`。
+- NMPA 标准采集固定使用人工辅助闭环：agent 生成计划并提前提示用户在自己的浏览器中完成官方查询；用户保存每次查询的截图或官方导出；agent 再记录检索并通过专用清单导入。标准 `run-scenario` 和交付流水线不得调用旧 HTTP、Edge CDP 或 Playwright NMPA collector；这些实现只可用于开发诊断。
 - 正式来源按已确认项目画像动态装配；场景范围、适用条件和失败口径读取 `references/scenarios.md`。
 - 原始文件、PDF、网页快照和全文抽取文件必须优先按材料标题命名，文件名格式建议为：`MAT-000001_材料标题前80字_来源_YYYYMMDD.ext`。标题需做文件名安全清理；只有无标题时才退回 `material_id` 命名。下载失败、权限受限或仅有题录/摘要时，必须在材料记录、证据卡和 Excel 补证表中写明“未取得原文”的原因。
 - PubMed/PMC 文献采集必须保留页面 Abstract 的完整结构化内容，包括 Objective/Methods/Results/Interpretation/Keywords 等分段；不得只保存摘要前几句。PubMed 命中文献后，还要抓取 Similar articles 中高相关条目并记录为相关文献线索。若 PubMed 页面存在 Free full text / PMC 入口，应进入 PMC 全文页，优先下载 PDF；PDF 不可用时保存 PMC XML/HTML 全文和抽取文本，并记录不可下载原因。
@@ -59,7 +59,7 @@ description: 用于 IVD 企业研发人员开展研发项目调研，组织调�
 
 1. 理解项目：确认产品、适用场景、目标地区、评审目的和时间限制。
 2. 补全检索条件：用文字 RPG 式选项补齐产品类型、检测项目、疾病、样本、平台、预期用途、地区、用户、竞品、文献、专利和报告深度；这是正式检索前的必要动作。
-3. 收集材料：整理法规、指南、竞品、文献、市场和技术路线资料。
+3. 收集材料：整理法规、指南、竞品、文献、市场和技术路线资料；NMPA 进入人工辅助闭环时，应先向用户说明需要在官方页面查询并保存截图或导出文件。
 4. 生成证据卡：记录证据摘要、来源、关键结论、可信度、风险和待复核点。
 5. 形成材料包：将原始资料索引、证据卡和状态文件组织成可追溯材料包。
 6. 生成报告：输出 V2.1 标准交付目录中的 `00_立项调研综合报告.html`，报告必须采用研发筛选版工作台，含项目分析、研发阅读入口、核心必读文献、全部证据卡和资料缺口；证据地图、缺口任务、关键证据、文献、竞品、标准、专利和指标事实应在这些入口中以业务可读方式呈现。
@@ -84,7 +84,7 @@ nuoyan verify-package --task-id <task_id> --json
 - 运行前检查网络、磁盘、浏览器、登录态、下载权限、翻译引擎和外部插件，提前说明缺失能力及影响。
 - 预计某信源登录后信息更完整时，先提示用户登录，再启动采集；不要等系统误判为空结果后才解释。
 - 当前 Chrome 已登录不等于独立 Playwright profile 已登录；必须分别探测，不得混写为同一登录态。
-- 需要人工登录、验证码或机构认证时，主动打开可见浏览器并等待用户完成；完成后再切回无头采集。
+- 需要人工登录、验证码或机构认证时，提前提示并由用户在合法可见页面中完成。只有对应场景支持持久化自动采集时才切回无头模式；NMPA 继续走人工证据导入。
 - 操作可能弹窗、抢焦点、打开下载窗口、占用同一浏览器 profile 或运行较久时，执行前先提示用户。
 - 能力缺失但可安装时，明确提示安装对应插件组件；用户拒绝或无法安装时，保留可用降级路径和资料缺口。
 
@@ -123,12 +123,31 @@ CLI 或脚本失败时，不要掩盖失败，不要编造结果。应说明失�
 1. 运行 `nuoyan browser-workflow --scenario <scenario_id> --query <query> --json` 查看固定页面 workflow 和目标搜索 URL。
 2. 运行 `nuoyan prepare-browser-session --task-id <task_id> --scenario <scenario_id> --json` 创建会话目录。
 3. 可先运行 `nuoyan probe-browser-workflow --task-id <task_id> --scenario <scenario_id> --query <query> --json` 做只读探测，判断当前登录态是否可用。
-4. 对结构未知或动态阻塞的网站，运行 `nuoyan scout-browser-workflow --task-id <task_id> --scenario <scenario_id> --query <query> --launch-mode playwright --json` 保存 DOM/network 候选；NMPA 可改用 `--launch-mode edge-cdp`。
+4. 对结构未知或动态阻塞的网站，运行 `nuoyan scout-browser-workflow --task-id <task_id> --scenario <scenario_id> --query <query> --launch-mode playwright --json` 保存 DOM/network 候选。
 5. 如返回 `needs_login` 或 `permission_required`，运行 `nuoyan open-browser-session --task-id <task_id> --scenario <scenario_id> --json` 打开可见浏览器。
 6. 引导用户在浏览器中手动完成登录、机构认证或真人验证。
-7. 运行 `nuoyan run-browser-workflow --task-id <task_id> --scenario <scenario_id> --query <query> [--methodology <method>] [--launch-mode playwright|edge-cdp] --json` 执行固定搜索或正常导航流程，保存快照并记录状态；NMPA 竞品注册采集优先使用 `--launch-mode edge-cdp`，默认先尝试无头执行，只有需要用户登录、验证码、机构认证或排错时才主动加 `--headed`；如自动降级为可见浏览器，必须记录降级原因。
+7. 运行 `nuoyan run-browser-workflow --task-id <task_id> --scenario <scenario_id> --query <query> [--methodology <method>] [--launch-mode playwright|edge-cdp] --json` 执行已支持场景的固定搜索或正常导航流程，保存快照并记录状态；如自动降级为可见浏览器，必须记录降级原因。NMPA 不使用此入口完成标准采集。
 8. 后续采集使用同一任务目录下的 `browser_state/<scenario_id>`，保留登录态和验证状态。
 9. 不得自动破解验证码、Cloudflare、付费墙或权限墙；无法合法访问时必须记录失败原因。
+
+### NMPA 人工辅助采集
+
+- `run-scenario --scenario nmpa_competitor`、`run-full-pipeline` 和 `run-delivery-pipeline` 只生成或刷新检索计划，不访问 NMPA 网络接口，也不接管用户浏览器。
+- agent 应把 `manual/nmpa/search_plan.md` 中的官方入口、查询词和注册类别转述给用户，并提前说明可能需要登录、验证码或页面人工操作。用户不需要运行 CLI。
+- 用户在自己的浏览器中逐项查询，保存包含查询条件和结果状态的可见截图，或保存 NMPA 官方导出文件。不得读取或保存用户密码、Cookie、token、API Key 等凭据。
+- agent 使用以下内部命令完成记录和导入：
+
+```bash
+nuoyan nmpa-manual-plan --task-id <task_id> --json
+nuoyan record-nmpa-manual-search --task-id <task_id> --record <search_record.json> --json
+nuoyan import-nmpa-manual --task-id <task_id> --manifest <import_manifest.json> --json
+```
+
+- `awaiting_user_search` 表示仍有计划内查询未执行；`awaiting_import` 表示查询已记录但截图、导出或结构化结果尚未完整导入。这两个状态都不得解释为“未检出竞品”。
+- 只有计划内全部查询均有结构化记录、每项均有可见证据、导入清单声明完整且结果数全部为 0 时，才允许进入 `verified_no_results`。有真实结果并完成专用导入时进入 `completed` 或 `completed_with_warnings`。
+- 如果任务中已经存在 NMPA 正向材料或待核验线索，后续零结果与其冲突时必须保持 `needs_manual_review`，不得覆盖为 `verified_no_results`。
+- 通用 `import-finding` 导入的 NMPA 线索只能标为待人工复核，不能替代专用清单、不能关闭该来源，也不能让 `business_ready=true`。
+- 旧 NMPA HTTP、Edge CDP、Playwright 和 DOM 采集器只保留作开发诊断，不得接入标准采集或业务就绪判断。
 
 ### PatentHub 登录态采集
 
@@ -152,6 +171,8 @@ nuoyan import-finding --task-id <task_id> \
 ```
 
 支持 `--content-file` 从文件读取长文本。`--material-type` 可选值：`regulatory | competitor | standard | patent | literature | local_import`，省略时自动推断。
+
+NMPA 竞品注册的正式闭环必须使用 `record-nmpa-manual-search` 和 `import-nmpa-manual`。通过本节通用命令导入的 NMPA 信息仅作为线索，不代表官方来源已完成。
 
 ## life-science-research 插件证据导入
 

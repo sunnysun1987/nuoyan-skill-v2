@@ -5,6 +5,7 @@ import zipfile
 from pathlib import Path
 
 from .jsonl import count_jsonl_rows, read_jsonl, write_json
+from .nmpa_manual_contract import nmpa_manual_gate_warnings
 from .paths import safe_topic
 from .project_profile import (
     NETWORK_SENSITIVE_SCENARIOS,
@@ -415,6 +416,8 @@ def scenario_coverage_warnings(task_dir: Path) -> list[str]:
                 f"正式场景 {scenario_id} 当前状态为 {status}，不能判定业务可交付。{last_message}"
             )
             continue
+        if scenario_id == "nmpa_competitor":
+            warnings.extend(nmpa_manual_gate_warnings(task_dir, scenario))
         if status == "no_results" and not last_message:
             warnings.append(
                 f"正式场景 {scenario_id} 为 no_results 但缺少说明，不能判定业务可交付。"

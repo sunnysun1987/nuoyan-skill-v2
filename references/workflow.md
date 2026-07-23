@@ -67,6 +67,19 @@ nuoyan show-status --task-id <task_id> --json
 
 适用场景可以出现 `completed`、`no_results`、`deferred` 或失败状态，但不能“无记录”。`no_results` 必须包含检索式、检索层级和范围说明；`deferred` 必须说明范围排除或暂缓原因和影响；失败状态必须进入兜底链路。非适用专科信源不应进入客户报告的资料缺口。
 
+## NMPA 人工辅助闭环
+
+`nmpa_competitor` 不走标准自动网页采集。agent 在确认检索画像后生成计划，提前告诉用户需要在 NMPA 官方页面逐项查询，并说明可能出现登录、验证码、筛选器或下载操作。用户只操作自己的浏览器，不运行 CLI，也不向 agent 提供密码、Cookie、token 或 API Key。
+
+1. agent 运行 `nmpa-manual-plan`，读取 `manual/nmpa/search_plan.md`，向用户说明官方入口、每个查询词和国内/进口注册类别。
+2. 用户逐项查询并保存可见截图或 NMPA 官方导出。截图应能支持核对查询条件和结果状态；官方导出应保持原始文件。
+3. agent 根据用户完成情况填写检索记录模板，运行 `record-nmpa-manual-search`。仍有计划项未执行时状态为 `awaiting_user_search`；全部查询已记录但证据尚未完整导入时为 `awaiting_import`。
+4. agent 填写导入清单并运行 `import-nmpa-manual`。命令逐项核对检索会话、查询词、注册类别、精确结果数、NMPA URL、证据文件及 SHA-256，并将合法证据复制到任务目录。
+5. 有结果时，结构化产品记录写入 Material 并生成草稿 EvidenceCard；完整时为 `completed`，次要产品字段缺失但仍可追溯时为 `completed_with_warnings`。
+6. 只有全部必要计划项均已记录和验证、每项都有可见证据且结果数全部为 0 时，才允许 `verified_no_results`。用户未操作、未上传、页面受限、只完成部分检索或只用 `import-finding` 导入线索，都不得解释为无结果；已有 NMPA 正向材料或线索与本次零结果冲突时，继续保持待人工复核。
+
+`verify-package` 会重新校验上述文件、集合和哈希。人工检索完成后修改计划、记录、清单或证据文件会使门禁失败，必须重新记录或导入。国内限定范围只要求国内注册类别；国内+进口范围要求计划中的全部类别，未确认的额外类别不应被擅自加入。
+
 ## V2.1 文献证据增强流程
 
 1. 确认文献 profile 和召回数量，不允许默认无上限全量抓取。标准完整调研使用 `complete_literature`，英文文献源默认 200 条/源；`quick_scan` 才使用 50 条左右的轻量上限。低 `literature_retmax` 不得静默降低完整调研 profile 的默认深度。
@@ -82,7 +95,7 @@ nuoyan show-status --task-id <task_id> --json
 遇到 DNS、HTTP 429、连接失败、页面结构变化、登录态、验证码、权限或下载失败时，不得直接跳过。按以下顺序处理并记录：
 
 1. 改写/缩短检索式重试，避免超长 query、混合中英文和过多限定词导致检索失败。CMDE、标准、中文全文和中文期刊应先用检测项目/靶标核心词，再使用产品提示、宽业务词和原始检索式作为兜底层级；PubMed、PMC 和 OpenAlex 应先用英文核心词，再使用产品提示、方法学、样本类型和预期用途等宽检索层级。
-2. 使用公开官方来源、PubMed 页面、PMC 页面、OpenAlex 网页、机构公告或期刊官网手工检索；取得有效结果后用 `import-finding` 写入材料管线。
+2. 使用公开官方来源、PubMed 页面、PMC 页面、OpenAlex 网页、机构公告或期刊官网手工检索；取得有效结果后用 `import-finding` 写入材料管线。NMPA 例外：必须使用专用人工检索记录和导入清单，通用导入只能保留线索。
 3. 对需要 JavaScript、登录态或结构未知的网站，运行 `site-profile`、`browser-workflow`、`probe-browser-workflow` 或 `scout-browser-workflow`，并使用 `record-site-observation` 记录观察结果。
 4. 对验证码、付费墙、机构权限、Cloudflare 真人验证等限制，不得绕过；应请求用户提供合法取得的文件、链接或登录后可见材料。
 5. 仍无法完成时，将来源状态、失败原因、兜底动作和下一步补证任务写入报告“缺口与任务”和 Excel 审阅表。
@@ -99,6 +112,8 @@ Chrome 的定位：
 - 不用于绕过验证码、权限墙、付费墙或网站访问控制；
 - 不作为长期主采集引擎；
 - 观察结果必须沉淀为 `site-profile`、adapter 代码、测试或任务日志。
+
+NMPA 标准采集不接管 Chrome，也不使用本节浏览器 workflow。用户在自己的浏览器中合法查询并保存证据，agent 走 `record-nmpa-manual-search` 和 `import-nmpa-manual`；旧 NMPA 浏览器能力只用于适配器开发诊断。
 
 推荐顺序：
 

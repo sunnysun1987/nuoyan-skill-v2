@@ -408,6 +408,11 @@ def import_nmpa_manual(task_dir: Path, manifest_path: Path) -> dict[str, Any]:
         for item_id in required_ids
         if item_id in recorded_attempts
     ) and set(recorded_attempts) == set(required_ids)
+    nmpa_material_count = sum(
+        1
+        for material in read_jsonl(task_dir / "data" / "materials.jsonl")
+        if material.get("source_scenario") == SCENARIO_ID
+    )
 
     if remaining_ids:
         scenario.status = FailureType.NEEDS_MANUAL_REVIEW.value
@@ -416,6 +421,14 @@ def import_nmpa_manual(task_dir: Path, manifest_path: Path) -> dict[str, Any]:
         scenario.last_message = (
             f"NMPA 已核验 {len(validated_ids)} 项导入，仍有 {len(remaining_ids)} 项未完成；"
             "信源保持待人工处理。"
+        )
+    elif all_zero and nmpa_material_count:
+        scenario.status = FailureType.NEEDS_MANUAL_REVIEW.value
+        manual.phase = "awaiting_import"
+        manual.zero_results_verified = False
+        scenario.last_message = (
+            "NMPA 本次计划内检索均记录为零结果，但任务中已有 NMPA 正向材料线索，"
+            "两者存在冲突；须复核线索或补充专用正向导入，不能关闭为无结果。"
         )
     elif all_zero:
         scenario.status = FailureType.NO_RESULTS.value
@@ -439,11 +452,7 @@ def import_nmpa_manual(task_dir: Path, manifest_path: Path) -> dict[str, Any]:
         scenario.last_message = "NMPA 人工检索、可见证据和结构化结果已覆盖全部计划项。"
 
     manual.last_updated = now_iso()
-    scenario.material_count = sum(
-        1
-        for material in read_jsonl(task_dir / "data" / "materials.jsonl")
-        if material.get("source_scenario") == SCENARIO_ID
-    )
+    scenario.material_count = nmpa_material_count
     evidence_result = (
         generate_draft_evidence_cards(task_dir)
         if material_ids

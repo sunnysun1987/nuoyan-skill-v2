@@ -72,8 +72,12 @@ def _update_scenario_after_import(
                 phase="not_started",
                 last_updated=now_iso(),
             )
-        closed_phases = {"completed", "completed_with_warnings", "verified_no_results"}
-        if scenario.manual_collection.phase not in closed_phases:
+        if scenario.manual_collection.phase == "verified_no_results":
+            scenario.manual_collection.phase = "awaiting_import"
+            scenario.manual_collection.zero_results_verified = False
+            scenario.manual_collection.last_updated = now_iso()
+        closed_positive_phases = {"completed", "completed_with_warnings"}
+        if scenario.manual_collection.phase not in closed_positive_phases:
             scenario.status = "needs_manual_review"
             scenario.last_message = (
                 "通用 import-finding 导入的 NMPA 材料仅作为待复核线索；"

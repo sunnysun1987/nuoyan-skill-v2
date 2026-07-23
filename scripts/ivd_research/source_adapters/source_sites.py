@@ -24,11 +24,14 @@ SOURCE_SITES: list[SourceSite] = [
         display_name="NMPA 医疗器械注册查询",
         source_category="competitor",
         base_url="https://www.nmpa.gov.cn/datasearch/home-index.html#category=ylqx",
-        access_mode="browser_workflow",
+        access_mode="manual_assisted",
         query_fields=["product_name", "registration_type", "methodology"],
         capture_fields=["registration_certificate_number", "product_name", "registrant", "model", "scope", "approval_date", "valid_until"],
         adapter_id="nmpa_competitor",
-        restriction_notes="优先 HTTP/API；页面结构变化或 Edge 不可用时降级 Playwright DOM，失败不得判定为无注册结果。",
+        restriction_notes=(
+            "标准流程由 agent 生成检索计划，用户在官方页面合法操作并保存截图或官方导出，"
+            "再由专用清单导入；未执行、未上传或证据未核验不得判定为无注册结果。"
+        ),
     ),
     SourceSite(
         source_site_id="standards_current",

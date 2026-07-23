@@ -80,7 +80,7 @@ Recommended allowlist:
 - `www.cmde.org.cn`
 - `std.samr.gov.cn`
 
-If public APIs remain blocked, use the skill's fallback path: record the true failure, collect from legal public pages or user-provided files, import findings with `import-finding`, and keep unresolved items in the Excel review and supplement task table.
+If public APIs remain blocked, use the skill's fallback path: record the true failure, collect from legal public pages or user-provided files, import findings with `import-finding`, and keep unresolved items in the Excel review and supplement task table. NMPA competitor registration is an exception: its formal source closure uses the dedicated human-assisted workflow below; a generic finding is only a clue.
 
 ## Workflow Contract
 
@@ -107,6 +107,22 @@ V2.1 adds a standard source-site baseline and lightweight local knowledge assets
 - `nuoyan import-literature-table --task-id <task_id> --path literature.xlsx --json` imports local CSV/XLSX literature lists.
 - `nuoyan build-knowledge --task-id <task_id> --json` generates metric facts, topic index, dedup index and a literature graph.
 - `nuoyan source-quality --task-id <task_id> --json` audits no-result sources for possible false negatives, including single-query no-results, missing core-query attempts, overconstrained long queries and cross-source contradictions such as OpenAlex no-results while PubMed/PMC/LSR already has related literature.
+
+## NMPA Human-Assisted Collection
+
+NMPA competitor registration uses a human-assisted evidence workflow. Standard scenario and delivery commands generate a deterministic search plan; they do not run the legacy NMPA HTTP, Edge CDP or Playwright collectors. The user performs legal searches on the official NMPA page in their own browser and saves a visible screenshot or official export for every required query/category. The agent then records and imports those files:
+
+```bash
+nuoyan nmpa-manual-plan --task-id <task_id> --json
+nuoyan record-nmpa-manual-search --task-id <task_id> --record <search_record.json> --json
+nuoyan import-nmpa-manual --task-id <task_id> --manifest <import_manifest.json> --json
+```
+
+The business user does not run these commands and never provides passwords, cookies, tokens or API keys. The agent should tell the user before collection that the official page may require login, verification or manual filters, and should translate the generated plan into plain Chinese instructions.
+
+The source remains open while its phase is `awaiting_user_search` or `awaiting_import`. Missing user action, a missing upload, a blocked page or an incomplete plan must never become `no_results`. A zero-result closure is valid only when every required plan attempt has a structured search record, visible evidence, exact result count and a complete import manifest; only then may the phase become `verified_no_results`. An existing positive NMPA clue conflicts with a later zero-result capture and keeps the source open for review. Positive imports create traceable NMPA materials and draft evidence cards and close as `completed` or `completed_with_warnings`.
+
+`verify-package` rechecks the plan, search record, manifest, copied evidence and SHA-256 values instead of trusting the top-level scenario status. Generic NMPA information imported with `import-finding` remains `needs_manual_review` and cannot satisfy the official-source gate. Legacy browser collectors remain available only for adapter development and diagnostics.
 
 Professional Chinese reading support is built into this repository as a delivery-time capability. R&D users should receive an HTML report that already contains Chinese reading text; they do not need to run translation commands or configure accounts:
 

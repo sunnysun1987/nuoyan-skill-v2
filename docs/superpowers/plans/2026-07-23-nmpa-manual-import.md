@@ -298,19 +298,26 @@ git commit -m "feat: route NMPA collection through manual import"
 
 **Files:**
 - Modify: `scripts/ivd_research/package.py`
+- Modify: `scripts/ivd_research/nmpa_manual.py`
+- Modify: `scripts/ivd_research/nmpa_manual_contract.py`
+- Modify: `scripts/ivd_research/import_finding.py`
+- Modify: `scripts/ivd_research/source_adapters/source_sites.py`
 - Modify: `SKILL.md`
 - Modify: `README.md`
 - Modify: `references/actions.md`
 - Modify: `references/workflow.md`
 - Modify: `references/cli-contract.md`
 - Modify: `references/scenarios.md`
+- Modify: `references/browser-workflow.md`
+- Test: `scripts/tests/test_nmpa_manual.py`
 - Test: `scripts/tests/test_package_verification.py`
+- Test: `scripts/tests/test_source_sites_config.py`
 
 **Interfaces:**
 - Consumes nested `manual_collection` state.
 - Produces coverage warnings that reject unverified NMPA `no_results` and generic/manual clues that did not complete the dedicated manifest workflow.
 
-- [ ] **Step 1: Write failing gate tests**
+- [x] **Step 1: Write failing gate tests**
 
 ```python
 def test_unverified_nmpa_no_results_blocks_scenario_coverage(tmp_path):
@@ -324,19 +331,19 @@ def test_verified_nmpa_no_results_satisfies_source_coverage(tmp_path):
     assert not any("nmpa_competitor" in item for item in scenario_coverage_warnings(tmp_path))
 ```
 
-- [ ] **Step 2: Run tests and confirm RED**
+- [x] **Step 2: Run tests and confirm RED**
 
 Run: `python3 -m pytest -q scripts/tests/test_package_verification.py -k "nmpa"`
 
-- [ ] **Step 3: Implement the gate and update documentation**
+- [x] **Step 3: Implement the gate and update documentation**
 
 Document the user experience in plain Chinese: the agent prepares the plan, tells the user early when manual browser work or login is needed, waits for saved files, performs CLI import itself, and never asks an R&D user to type commands. Remove standard-path claims that NMPA defaults to HTTP/Edge/Playwright automation; retain those modules as diagnostic tooling only.
 
-- [ ] **Step 4: Run focused tests and confirm GREEN**
+- [x] **Step 4: Run focused tests and confirm GREEN**
 
 Run: `python3 -m pytest -q scripts/tests/test_package_verification.py -k "nmpa"`
 
-- [ ] **Step 5: Commit task 4**
+- [x] **Step 5: Commit task 4**
 
 ```bash
 git add scripts/ivd_research/package.py SKILL.md README.md references scripts/tests/test_package_verification.py

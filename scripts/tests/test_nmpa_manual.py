@@ -6,6 +6,7 @@ from typer.testing import CliRunner
 from ivd_research import cli as cli_module
 from ivd_research.cli import app
 from ivd_research.confirmations import update_confirmations
+from ivd_research.import_finding import import_finding
 from ivd_research.jsonl import read_json, read_jsonl, write_json
 from ivd_research.nmpa_manual import (
     collect,
@@ -13,6 +14,7 @@ from ivd_research.nmpa_manual import (
     prepare_nmpa_manual_plan,
     record_nmpa_manual_search,
 )
+from ivd_research.package import scenario_coverage_warnings
 from ivd_research.status import init_task, load_task
 
 
@@ -191,6 +193,27 @@ def test_prepare_nmpa_manual_plan_keeps_both_categories_by_default(tmp_path: Pat
     assert {row["registration_type"] for row in result["plan"]["attempts"]} == {
         "境内医疗器械（注册）",
         "进口医疗器械（注册）",
+    }
+
+
+@pytest.mark.parametrize(
+    ("competitor_scope", "expected_registration_type"),
+    [
+        ("仅境内产品，不含进口产品", "境内医疗器械（注册）"),
+        ("仅进口产品，不含境内产品", "进口医疗器械（注册）"),
+    ],
+)
+def test_prepare_nmpa_manual_plan_honors_explicit_scope_exclusions(
+    tmp_path: Path,
+    competitor_scope: str,
+    expected_registration_type: str,
+):
+    task_dir = confirmed_task(tmp_path, competitor_scope=competitor_scope)
+
+    result = prepare_nmpa_manual_plan(task_dir)
+
+    assert {row["registration_type"] for row in result["plan"]["attempts"]} == {
+        expected_registration_type
     }
 
 
@@ -392,6 +415,58 @@ def test_verified_zero_results_close_only_after_all_attempts(tmp_path: Path):
     assert scenario.manual_collection is not None
     assert scenario.manual_collection.phase == "verified_no_results"
     assert scenario.manual_collection.zero_results_verified is True
+    assert not any(
+        "NMPA" in warning for warning in scenario_coverage_warnings(task_dir)
+    )
+
+
+def test_new_generic_nmpa_clue_reopens_verified_zero_result(tmp_path: Path):
+    task_dir, plan = prepared_task(tmp_path)
+    record_nmpa_manual_search(task_dir, write_search_record(task_dir, plan))
+    import_nmpa_manual(task_dir, write_import_manifest(task_dir, plan))
+
+    import_finding(
+        task_dir,
+        title="新发现的 NMPA 注册线索",
+        source="nmpa_competitor",
+        source_url=(
+            "https://www.nmpa.gov.cn/datasearch/home-index.html#category=ylqx"
+        ),
+        content="国械注准20261234567 C反应蛋白测定试剂盒",
+        material_type="competitor",
+        identifier="国械注准20261234567",
+    )
+
+    scenario = load_task(task_dir).scenario_statuses["nmpa_competitor"]
+    assert scenario.status == "needs_manual_review"
+    assert scenario.manual_collection is not None
+    assert scenario.manual_collection.phase == "awaiting_import"
+    assert scenario.manual_collection.zero_results_verified is False
+
+
+def test_existing_nmpa_clue_prevents_later_zero_result_closure(tmp_path: Path):
+    task_dir, plan = prepared_task(tmp_path)
+    import_finding(
+        task_dir,
+        title="待核验的 NMPA 注册线索",
+        source="nmpa_competitor",
+        source_url=(
+            "https://www.nmpa.gov.cn/datasearch/home-index.html#category=ylqx"
+        ),
+        content="国械注准20261234567 C反应蛋白测定试剂盒",
+        material_type="competitor",
+        identifier="国械注准20261234567",
+    )
+    record_nmpa_manual_search(task_dir, write_search_record(task_dir, plan))
+
+    result = import_nmpa_manual(task_dir, write_import_manifest(task_dir, plan))
+
+    scenario = load_task(task_dir).scenario_statuses["nmpa_competitor"]
+    assert result["status"] == "needs_manual_review"
+    assert result["manual_phase"] == "awaiting_import"
+    assert "冲突" in result["message_zh"]
+    assert scenario.manual_collection is not None
+    assert scenario.manual_collection.zero_results_verified is False
 
 
 def test_partial_manifest_does_not_close_source(tmp_path: Path):
@@ -436,6 +511,9 @@ def test_result_import_creates_traceable_material_and_card(tmp_path: Path):
     events = list(read_jsonl(task_dir / "logs" / "events.jsonl"))
     assert events[-1]["event"] == "nmpa_manual_import_completed"
     assert events[-1]["status"] == "completed"
+    assert not any(
+        "NMPA" in warning for warning in scenario_coverage_warnings(task_dir)
+    )
 
 
 def test_import_is_idempotent_for_registration_number(tmp_path: Path):

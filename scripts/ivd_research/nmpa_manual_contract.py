@@ -8,7 +8,7 @@ import re
 from typing import Any
 from urllib.parse import parse_qsl, urlparse
 
-from .jsonl import read_json
+from .jsonl import read_json, read_jsonl
 from .source_adapters.source_sites import SOURCE_SITES
 
 
@@ -65,13 +65,39 @@ FORBIDDEN_KEY_TOKENS = {
 
 def registration_types(competitor_scope: Any) -> list[str]:
     scope = "".join(str(competitor_scope or "").split())
-    domestic_markers = ("仅境内", "只查境内", "只要境内", "境内产品", "国内产品", "国产")
-    import_markers = ("仅进口", "只查进口", "只要进口", "进口产品")
-    domestic_only = any(marker in scope for marker in domestic_markers)
-    import_only = any(marker in scope for marker in import_markers)
+    domestic_only_markers = (
+        "仅境内",
+        "只查境内",
+        "只要境内",
+        "不含进口",
+        "排除进口",
+        "不查进口",
+        "无需进口",
+    )
+    import_only_markers = (
+        "仅进口",
+        "只查进口",
+        "只要进口",
+        "不含境内",
+        "排除境内",
+        "不查境内",
+        "无需境内",
+        "不含国内",
+        "排除国内",
+    )
+    domestic_only = any(marker in scope for marker in domestic_only_markers)
+    import_only = any(marker in scope for marker in import_only_markers)
     if domestic_only and not import_only:
         return [DOMESTIC_REGISTRATION]
     if import_only and not domestic_only:
+        return [IMPORT_REGISTRATION]
+    domestic_mentioned = any(
+        marker in scope for marker in ("境内产品", "国内产品", "国产")
+    )
+    import_mentioned = "进口产品" in scope
+    if domestic_mentioned and not import_mentioned:
+        return [DOMESTIC_REGISTRATION]
+    if import_mentioned and not domestic_mentioned:
         return [IMPORT_REGISTRATION]
     return [DOMESTIC_REGISTRATION, IMPORT_REGISTRATION]
 
@@ -368,3 +394,273 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _checked_task_artifact(
+    task_dir: Path,
+    *,
+    relative_path: Any,
+    expected_sha256: Any,
+    label: str,
+) -> tuple[Path | None, list[str]]:
+    warnings: list[str] = []
+    relative = Path(str(relative_path or ""))
+    digest = str(expected_sha256 or "").strip().lower()
+    if not str(relative_path or "").strip() or relative.is_absolute():
+        return None, [f"NMPA {label}路径无效，未经人工证据核验。"]
+    task_root = task_dir.resolve()
+    candidate = (task_dir / relative).resolve()
+    try:
+        candidate.relative_to(task_root)
+    except ValueError:
+        return None, [f"NMPA {label}路径超出任务目录，未经人工证据核验。"]
+    if not candidate.is_file():
+        return None, [f"NMPA {label}文件不存在，未经人工证据核验。"]
+    if not digest or sha256_file(candidate) != digest:
+        warnings.append(f"NMPA {label}校验值不一致，未经人工证据核验。")
+    return candidate, warnings
+
+
+def _checked_json_artifact(
+    task_dir: Path,
+    *,
+    relative_path: Any,
+    expected_sha256: Any,
+    label: str,
+) -> tuple[dict[str, Any] | None, list[str]]:
+    path, warnings = _checked_task_artifact(
+        task_dir,
+        relative_path=relative_path,
+        expected_sha256=expected_sha256,
+        label=label,
+    )
+    if path is None or warnings:
+        return None, warnings
+    try:
+        return read_json(path), []
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None, [f"NMPA {label}无法解析，未经人工证据核验。"]
+
+
+def nmpa_manual_gate_warnings(
+    task_dir: Path,
+    scenario: dict[str, Any],
+) -> list[str]:
+    status = str(scenario.get("status") or "not_started")
+    manual = scenario.get("manual_collection")
+    if not isinstance(manual, dict):
+        if status == "no_results":
+            return ["NMPA no_results 未经人工证据核验，不能判定业务可交付。"]
+        return ["NMPA completed 缺少专用人工导入记录，不能判定业务可交付。"]
+
+    warnings: list[str] = []
+    required_ids = [str(value) for value in manual.get("required_attempt_ids", [])]
+    recorded_ids = [str(value) for value in manual.get("recorded_attempt_ids", [])]
+    validated_ids = [str(value) for value in manual.get("validated_attempt_ids", [])]
+    if not required_ids:
+        warnings.append("NMPA 人工计划没有必做检索项，未经人工证据核验。")
+    if set(recorded_ids) != set(required_ids):
+        warnings.append("NMPA 人工检索记录未覆盖全部计划项，未经人工证据核验。")
+    if set(validated_ids) != set(required_ids):
+        warnings.append("NMPA 专用人工导入未核验全部计划项，不能判定业务可交付。")
+
+    plan, plan_warnings = _checked_json_artifact(
+        task_dir,
+        relative_path=manual.get("plan_path"),
+        expected_sha256=manual.get("plan_sha256"),
+        label="检索计划",
+    )
+    record, record_warnings = _checked_json_artifact(
+        task_dir,
+        relative_path=manual.get("search_record_path"),
+        expected_sha256=manual.get("search_record_sha256"),
+        label="检索记录",
+    )
+    manifest, manifest_warnings = _checked_json_artifact(
+        task_dir,
+        relative_path=manual.get("manifest_path"),
+        expected_sha256=manual.get("manifest_sha256"),
+        label="导入清单",
+    )
+    warnings.extend(plan_warnings)
+    warnings.extend(record_warnings)
+    warnings.extend(manifest_warnings)
+    if plan is None or record is None or manifest is None:
+        return list(dict.fromkeys(warnings))
+
+    try:
+        task_id = str(read_json(task_dir / "task.json").get("task_id") or "")
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        task_id = ""
+    for label, payload in (
+        ("检索计划", plan),
+        ("检索记录", record),
+        ("导入清单", manifest),
+    ):
+        try:
+            reject_sensitive_fields(payload)
+        except ValueError as exc:
+            warnings.append(f"NMPA {label}{exc}。")
+        if not task_id or str(payload.get("task_id") or "") != task_id:
+            warnings.append(f"NMPA {label}的 task_id 与当前任务不一致。")
+
+    record_session = str(record.get("search_session_id") or "")
+    manifest_session = str(manifest.get("search_session_id") or "")
+    if not record_session or record_session != manifest_session:
+        warnings.append("NMPA 检索记录与导入清单的检索会话不一致。")
+
+    plan_items = plan.get("attempts", [])
+    record_items = record.get("attempts", [])
+    manifest_items = manifest.get("attempts", [])
+    if not isinstance(plan_items, list):
+        plan_items = []
+    if not isinstance(record_items, list):
+        record_items = []
+    if not isinstance(manifest_items, list):
+        manifest_items = []
+    plan_ids = [str(item.get("attempt_id") or "") for item in plan_items]
+    if len(plan_ids) != len(set(plan_ids)) or any(not value for value in plan_ids):
+        warnings.append("NMPA 检索计划包含空值或重复 attempt_id。")
+    plan_attempts = plan_attempt_map(plan)
+    for item in plan_items:
+        attempt_id_value = str(item.get("attempt_id") or "")
+        if (
+            not str(item.get("query") or "").strip()
+            or item.get("registration_type")
+            not in {DOMESTIC_REGISTRATION, IMPORT_REGISTRATION}
+            or not is_official_nmpa_url(item.get("official_search_url"))
+        ):
+            warnings.append(f"NMPA {attempt_id_value or '<empty>'} 的检索计划内容无效。")
+
+    record_ids = [str(item.get("attempt_id") or "") for item in record_items]
+    manifest_ids = [str(item.get("attempt_id") or "") for item in manifest_items]
+    if len(record_ids) != len(set(record_ids)):
+        warnings.append("NMPA 检索记录包含重复 attempt_id。")
+    if len(manifest_ids) != len(set(manifest_ids)):
+        warnings.append("NMPA 导入清单包含重复 attempt_id。")
+    record_attempts = {
+        str(item.get("attempt_id") or ""): item
+        for item in record_items
+        if item.get("attempt_id")
+    }
+    manifest_attempts = {
+        str(item.get("attempt_id") or ""): item
+        for item in manifest_items
+        if item.get("attempt_id")
+    }
+    if set(plan_ids) != set(required_ids):
+        warnings.append("NMPA 检索计划与任务状态不一致，未经人工证据核验。")
+    if set(record_attempts) != set(required_ids) or record.get("operator_confirmed") is not True:
+        warnings.append("NMPA 检索记录不完整或缺少人工确认，未经人工证据核验。")
+    if set(manifest_attempts) != set(required_ids) or manifest.get("capture_complete") is not True:
+        warnings.append("NMPA 导入清单不完整，不能判定业务可交付。")
+
+    for item in record_items:
+        try:
+            validate_record_attempt(item, plan_attempts=plan_attempts)
+        except ValueError as exc:
+            warnings.append(f"NMPA {exc}")
+
+    observed_count = 0
+    manifest_registration_numbers: set[str] = set()
+    for attempt_id_value in required_ids:
+        record_attempt = record_attempts.get(attempt_id_value) or {}
+        manifest_attempt = manifest_attempts.get(attempt_id_value) or {}
+        result_count = record_attempt.get("result_count")
+        if isinstance(result_count, bool) or not isinstance(result_count, int) or result_count < 0:
+            warnings.append(f"NMPA {attempt_id_value} 的 result_count 无效。")
+            continue
+        observed_count += result_count
+        results = manifest_attempt.get("results")
+        if not isinstance(results, list) or len(results) != result_count:
+            warnings.append(
+                f"NMPA {attempt_id_value} 的结果数量与检索记录不一致。"
+            )
+            results = []
+        attempt_registration_numbers: set[str] = set()
+        for result in results:
+            try:
+                normalized, _ = _validate_result(
+                    result,
+                    attempt_id=attempt_id_value,
+                )
+            except ValueError as exc:
+                warnings.append(f"NMPA {exc}")
+                continue
+            registration_number = normalized[
+                "registration_certificate_number"
+            ].lower()
+            if registration_number in attempt_registration_numbers:
+                warnings.append(
+                    f"NMPA {attempt_id_value} 的结果包含重复注册证编号。"
+                )
+            attempt_registration_numbers.add(registration_number)
+            manifest_registration_numbers.add(registration_number)
+        evidence_files = manifest_attempt.get("evidence_files")
+        if not isinstance(evidence_files, list) or not evidence_files:
+            warnings.append(
+                f"NMPA {attempt_id_value} 缺少截图或官方导出，未经人工证据核验。"
+            )
+            continue
+        for evidence in evidence_files:
+            if not isinstance(evidence, dict):
+                warnings.append(f"NMPA {attempt_id_value} 的证据文件记录无效。")
+                continue
+            evidence_path, evidence_warnings = _checked_task_artifact(
+                task_dir,
+                relative_path=evidence.get("relative_path"),
+                expected_sha256=evidence.get("sha256"),
+                label=f"{attempt_id_value} 证据文件",
+            )
+            warnings.extend(evidence_warnings)
+            if evidence_path is not None and not evidence_warnings:
+                try:
+                    _validate_evidence_content(evidence_path)
+                except (OSError, ValueError) as exc:
+                    warnings.append(
+                        f"NMPA {attempt_id_value} 的证据文件格式无效：{exc}"
+                    )
+
+    if int(manual.get("observed_result_count") or 0) != observed_count:
+        warnings.append("NMPA 观察结果数与检索记录不一致。")
+    phase = str(manual.get("phase") or "")
+    if status == "no_results":
+        if (
+            phase != "verified_no_results"
+            or manual.get("zero_results_verified") is not True
+            or observed_count != 0
+            or int(scenario.get("material_count") or 0) != 0
+        ):
+            warnings.append("NMPA no_results 未经完整人工证据核验。")
+    elif status == "completed":
+        if phase != "completed" or manual.get("zero_results_verified") is True:
+            warnings.append("NMPA completed 与专用人工导入状态不一致。")
+        imported_ids = [
+            str(value) for value in manual.get("imported_material_ids", []) if value
+        ]
+        materials = {
+            str(item.get("material_id") or ""): item
+            for item in read_jsonl(task_dir / "data" / "materials.jsonl")
+        }
+        if observed_count <= 0 or not imported_ids:
+            warnings.append("NMPA completed 缺少专用人工导入结果。")
+        elif any(
+            material_id not in materials
+            or materials[material_id].get("adapter_id") != "nmpa_manual_import"
+            or materials[material_id].get("source_scenario") != SCENARIO_ID
+            for material_id in imported_ids
+        ):
+            warnings.append("NMPA completed 的专用人工导入材料不可追溯。")
+        else:
+            imported_registration_numbers = {
+                str(
+                    (materials[material_id].get("raw_fields") or {}).get(
+                        "registration_certificate_number"
+                    )
+                    or ""
+                ).lower()
+                for material_id in imported_ids
+            }
+            if imported_registration_numbers != manifest_registration_numbers:
+                warnings.append("NMPA completed 的材料与当前导入清单不一致。")
+    return list(dict.fromkeys(warnings))
