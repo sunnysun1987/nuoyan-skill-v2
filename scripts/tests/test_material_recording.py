@@ -1,9 +1,10 @@
 import json
+from pathlib import Path
 
 from ivd_research.import_finding import import_finding
 from ivd_research.jsonl import read_jsonl
 from ivd_research.models import Material
-from ivd_research.status import next_material_id, record_materials
+from ivd_research.status import init_task, load_task, next_material_id, record_materials
 
 
 def _material(material_id: str, source: str, key: str) -> Material:
@@ -98,3 +99,26 @@ def test_import_finding_preserves_task_id_and_skips_repeat(tmp_path):
     assert repeated["material_id"] == first["material_id"]
     assert len(materials) == 1
     assert materials[0]["task_id"] == "TASK-REAL"
+
+
+def test_generic_import_finding_cannot_close_nmpa_scenario(tmp_path):
+    state = init_task("CRP 定量检测试剂盒", tmp_path)
+    task_dir = Path(state.task_dir)
+
+    result = import_finding(
+        task_dir,
+        title="NMPA 人工线索",
+        source="nmpa_competitor",
+        source_url=(
+            "https://www.nmpa.gov.cn/datasearch/home-index.html#category=ylqx"
+        ),
+        content="国械注准20261234567 C反应蛋白测定试剂盒",
+        material_type="competitor",
+        identifier="国械注准20261234567",
+    )
+
+    scenario = load_task(task_dir).scenario_statuses["nmpa_competitor"]
+    assert result["recorded"] is True
+    assert scenario.material_count == 1
+    assert scenario.status == "needs_manual_review"
+    assert "专用人工导入" in scenario.last_message

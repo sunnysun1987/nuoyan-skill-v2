@@ -213,7 +213,7 @@ git commit -m "feat: import verified NMPA manual evidence"
 - Produces CLI commands `nmpa-manual-plan`, `record-nmpa-manual-search`, and `import-nmpa-manual`.
 - Replaces the `SCENARIO_COLLECTORS["nmpa_competitor"]` production mapping with `nmpa_manual.collect` while retaining legacy automatic modules for explicit diagnostics only.
 
-- [ ] **Step 1: Write failing CLI and generic-import guard tests**
+- [x] **Step 1: Write failing CLI and generic-import guard tests**
 
 ```python
 def test_run_scenario_nmpa_prepares_manual_plan_without_network(tmp_path):
@@ -242,11 +242,11 @@ def test_generic_import_finding_cannot_close_nmpa_scenario(tmp_path):
     assert scenario.status == "needs_manual_review"
 ```
 
-- [ ] **Step 2: Run tests and confirm RED**
+- [x] **Step 2: Run tests and confirm RED**
 
 Run: `python3 -m pytest -q scripts/tests/test_nmpa_manual.py scripts/tests/test_material_recording.py -k "nmpa"`
 
-- [ ] **Step 3: Add commands and route the collector**
+- [x] **Step 3: Add commands and route the collector**
 
 ```python
 @app.command("nmpa-manual-plan")
@@ -281,11 +281,11 @@ def import_nmpa_manual_command(
 
 Generic `import-finding` may store an NMPA material as a clue, but it must leave the source status as `needs_manual_review` and state that the dedicated manifest workflow is still required.
 
-- [ ] **Step 4: Run focused tests and confirm GREEN**
+- [x] **Step 4: Run focused tests and confirm GREEN**
 
 Run: `python3 -m pytest -q scripts/tests/test_nmpa_manual.py scripts/tests/test_material_recording.py -k "nmpa"`
 
-- [ ] **Step 5: Commit task 3**
+- [x] **Step 5: Commit task 3**
 
 ```bash
 git add scripts/ivd_research/cli.py scripts/ivd_research/import_finding.py scripts/tests/test_nmpa_manual.py scripts/tests/test_material_recording.py

@@ -1,7 +1,10 @@
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
+from ivd_research import cli as cli_module
+from ivd_research.cli import app
 from ivd_research.confirmations import update_confirmations
 from ivd_research.jsonl import read_json, read_jsonl, write_json
 from ivd_research.nmpa_manual import (
@@ -26,6 +29,8 @@ FULL_CONFIRMATIONS = {
     "intended_use": "炎症辅助诊断",
     "target_region": "中国",
     "competitor_scope": "NMPA 已注册同类产品",
+    "literature_date_range": {"start": "2021-01-01", "end": "2026-07-23"},
+    "literature_profile": "complete_literature",
     "patent_scope": "中国",
 }
 
@@ -197,6 +202,113 @@ def test_standard_nmpa_collector_returns_manual_plan_without_materials(tmp_path:
     assert result.status == "needs_manual_review"
     assert result.materials == []
     assert "人工" in result.message_zh
+
+
+def test_cli_routes_nmpa_to_manual_plan_without_legacy_network(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    task_dir = confirmed_task(tmp_path)
+    state = load_task(task_dir)
+    legacy_calls = []
+
+    def fail_if_legacy_collector_runs(**kwargs):
+        legacy_calls.append(kwargs)
+        raise AssertionError("legacy NMPA collector must not run")
+
+    monkeypatch.setattr(
+        "ivd_research.scenarios.nmpa_api.collect_nmpa_http",
+        fail_if_legacy_collector_runs,
+    )
+    result = CliRunner().invoke(
+        app,
+        [
+            "run-scenario",
+            "--task-id",
+            state.task_id,
+            "--scenario",
+            "nmpa_competitor",
+            "--output-root",
+            str(tmp_path),
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert legacy_calls == []
+    payload = read_json(task_dir / "manual" / "nmpa" / "search_plan.json")
+    assert payload["attempts"]
+    assert "awaiting_user_search" in result.stdout
+    persisted = load_task(task_dir).scenario_statuses["nmpa_competitor"]
+    assert persisted.manual_collection is not None
+    assert persisted.manual_collection.phase == "awaiting_user_search"
+    assert list(read_jsonl(task_dir / "data" / "materials.jsonl")) == []
+
+
+def test_nmpa_manual_cli_commands_complete_verified_zero_flow(tmp_path: Path):
+    task_dir = confirmed_task(tmp_path)
+    state = load_task(task_dir)
+    runner = CliRunner()
+    common = ["--task-id", state.task_id, "--output-root", str(tmp_path), "--json"]
+
+    plan_result = runner.invoke(app, ["nmpa-manual-plan", *common])
+    assert plan_result.exit_code == 0
+    plan = read_json(task_dir / "manual" / "nmpa" / "search_plan.json")
+    record_path = write_search_record(task_dir, plan)
+
+    record_result = runner.invoke(
+        app,
+        [
+            "record-nmpa-manual-search",
+            *common,
+            "--record",
+            str(record_path),
+        ],
+    )
+    assert record_result.exit_code == 0
+    assert "awaiting_import" in record_result.stdout
+
+    manifest_path = write_import_manifest(task_dir, plan)
+    import_result = runner.invoke(
+        app,
+        [
+            "import-nmpa-manual",
+            *common,
+            "--manifest",
+            str(manifest_path),
+        ],
+    )
+    assert import_result.exit_code == 0
+    assert '"status": "no_results"' in import_result.stdout
+
+
+def test_nmpa_manual_plan_command_requires_confirmed_business_scope(tmp_path: Path):
+    state = init_task("CRP 定量检测试剂盒", tmp_path)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "nmpa-manual-plan",
+            "--task-id",
+            state.task_id,
+            "--output-root",
+            str(tmp_path),
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert '"status": "needs_confirmation"' in result.stdout
+    assert not (Path(state.task_dir) / "manual" / "nmpa" / "search_plan.json").exists()
+
+
+def test_delivery_pipeline_classifies_nmpa_as_manual_not_http():
+    assert "nmpa_competitor" in cli_module.DELIVERY_MANUAL_SCENARIOS
+    assert "nmpa_competitor" not in cli_module.DELIVERY_HTTP_SCENARIOS
+    assert (
+        cli_module.SCENARIO_COLLECTORS["nmpa_competitor"]
+        is cli_module.nmpa_manual_collect
+    )
 
 
 def test_record_search_sets_awaiting_import_without_closing_source(tmp_path: Path):

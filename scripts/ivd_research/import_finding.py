@@ -8,13 +8,15 @@ to the CLI-driven HTML/Excel/zip pipeline.
 from pathlib import Path
 from typing import Any
 
-from .jsonl import read_json
-from .models import Material
+from .jsonl import append_jsonl, read_json, read_jsonl
+from .models import ManualCollectionState, Material
 from .status import (
     find_duplicate_material,
+    load_task,
     next_material_id,
     now_iso,
     record_materials,
+    save_task,
 )
 
 
@@ -45,6 +47,56 @@ def _infer_material_type(title: str, content: str, hint: str) -> str:
         if any(s in haystack for s in signals):
             return mtype
     return "literature"
+
+
+def _update_scenario_after_import(
+    task_dir: Path,
+    task_payload: dict[str, Any],
+    *,
+    source: str,
+) -> str:
+    if not isinstance(task_payload.get("scenario_statuses"), dict):
+        return ""
+    state = load_task(task_dir)
+    scenario = state.scenario_statuses.get(source)
+    if scenario is None:
+        return ""
+    scenario.material_count = sum(
+        1
+        for material in read_jsonl(task_dir / "data" / "materials.jsonl")
+        if material.get("source_scenario") == source
+    )
+    if source == "nmpa_competitor":
+        if scenario.manual_collection is None:
+            scenario.manual_collection = ManualCollectionState(
+                phase="not_started",
+                last_updated=now_iso(),
+            )
+        closed_phases = {"completed", "completed_with_warnings", "verified_no_results"}
+        if scenario.manual_collection.phase not in closed_phases:
+            scenario.status = "needs_manual_review"
+            scenario.last_message = (
+                "通用 import-finding 导入的 NMPA 材料仅作为待复核线索；"
+                "仍须完成 NMPA 专用人工导入、可见证据核验和计划覆盖，才能关闭信源。"
+            )
+    else:
+        scenario.status = "completed"
+        scenario.last_message = (
+            f"通过 {source} 可见官方页面/外部发现导入材料，"
+            f"当前累计 {scenario.material_count} 条。"
+        )
+    save_task(state)
+    append_jsonl(
+        task_dir / "logs" / "events.jsonl",
+        {
+            "time": now_iso(),
+            "event": "import_finding_scenario_updated",
+            "scenario_id": source,
+            "status": scenario.status,
+            "material_count": scenario.material_count,
+        },
+    )
+    return scenario.status
 
 
 def import_finding(
@@ -84,6 +136,11 @@ def import_finding(
         },
     )
     if duplicate:
+        scenario_status = _update_scenario_after_import(
+            task_dir,
+            task,
+            source=source,
+        )
         return {
             "material_id": duplicate.get("material_id", ""),
             "material_type": duplicate.get("material_type", material_type),
@@ -91,6 +148,7 @@ def import_finding(
             "taxonomy_tags": taxonomy_tags or [],
             "evidence_strength": evidence_strength,
             "recorded": False,
+            "scenario_status": scenario_status,
         }
     material_id = next_material_id(task_dir)
 
@@ -139,23 +197,11 @@ def import_finding(
     materials = [material]
     recorded_materials = record_materials(task_dir, materials)
 
-    # Update scenario_statuses so the Scenario Coverage table in reports
-    # reflects materials imported via import-finding (not just CLI collection).
-    try:
-        from .status import load_task, save_task
-
-        state = load_task(task_dir)
-        scenario = state.scenario_statuses.get(source)
-        if scenario is not None:
-            scenario.material_count += len(recorded_materials)
-            scenario.status = "completed"
-            scenario.last_message = (
-                f"通过 {source} 可见官方页面/外部发现导入材料，"
-                f"当前累计 {scenario.material_count} 条。"
-            )
-            save_task(state)
-    except Exception:
-        pass  # Non-critical: report scenario coverage may lag, but materials are safe.
+    scenario_status = _update_scenario_after_import(
+        task_dir,
+        task,
+        source=source,
+    )
 
     return {
         "material_id": material_id,
@@ -164,4 +210,5 @@ def import_finding(
         "taxonomy_tags": taxonomy_tags or [],
         "evidence_strength": evidence_strength,
         "recorded": bool(recorded_materials),
+        "scenario_status": scenario_status,
     }
