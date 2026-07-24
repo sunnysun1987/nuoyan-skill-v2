@@ -1,5 +1,6 @@
 import importlib.util
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -131,6 +132,8 @@ def _runtime_source_check(home: Path) -> dict:
         distribution_version = metadata.version("nuoyan-skill-v2")
     except metadata.PackageNotFoundError:
         distribution_version = ""
+    workflow_version_match = re.search(r"(?:^|-)v(\d+\.\d+\.\d+)(?:-|$)", WORKFLOW_VERSION)
+    workflow_semantic_version = workflow_version_match.group(1) if workflow_version_match else ""
     same_source = False
     if source_root.exists() and expected_root.exists():
         try:
@@ -140,7 +143,7 @@ def _runtime_source_check(home: Path) -> dict:
     version_matches = bool(
         declared_version
         and distribution_version == declared_version
-        and declared_version in WORKFLOW_VERSION
+        and workflow_semantic_version == declared_version
     )
     ok = same_source and version_matches
     return {
@@ -160,6 +163,7 @@ def _runtime_source_check(home: Path) -> dict:
             "distribution_version": distribution_version,
             "declared_version": declared_version,
             "workflow_version": WORKFLOW_VERSION,
+            "workflow_semantic_version": workflow_semantic_version,
             "version_matches": version_matches,
             "python_executable": sys.executable,
         },

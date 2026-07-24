@@ -1,6 +1,7 @@
 import pytest
 from typer.testing import CliRunner
 
+from ivd_research import doctor
 from ivd_research.cli import app
 from ivd_research.doctor import codex_plugin_check, run_doctor
 
@@ -89,6 +90,49 @@ def test_plugin_check_requires_installed_cache_when_config_says_enabled(tmp_path
 
     assert check["details"]["enabled"] is True
     assert check["details"]["cached"] is False
+    assert check["ok"] is False
+
+
+def test_plugin_check_is_ready_when_enabled_and_cached(tmp_path):
+    codex_home = tmp_path / ".codex"
+    manifest = (
+        codex_home
+        / "plugins"
+        / "cache"
+        / "openai-bundled"
+        / "browser"
+        / "26.715.72359"
+        / ".codex-plugin"
+        / "plugin.json"
+    )
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text("{}", encoding="utf-8")
+    (codex_home / "config.toml").write_text(
+        '[plugins."browser@openai-bundled"]\nenabled = true\n',
+        encoding="utf-8",
+    )
+
+    check = codex_plugin_check("browser@openai-bundled", "Browser", codex_home=codex_home)
+
+    assert check["ok"] is True
+
+
+def test_runtime_source_requires_exact_workflow_version(monkeypatch, tmp_path):
+    expected_root = tmp_path / "skills" / "nuoyan-skill-v2"
+    expected_root.mkdir(parents=True)
+    monkeypatch.setattr(doctor.Path, "samefile", lambda self, other: True)
+    monkeypatch.setattr(
+        doctor,
+        "_read_toml",
+        lambda path: {"project": {"version": "2.1.1"}},
+    )
+    monkeypatch.setattr(doctor.metadata, "version", lambda name: "2.1.1")
+
+    check = doctor._runtime_source_check(tmp_path)
+
+    assert check["details"]["same_source"] is True
+    assert check["details"]["distribution_version"] == "2.1.1"
+    assert check["details"]["version_matches"] is False
     assert check["ok"] is False
 
 
