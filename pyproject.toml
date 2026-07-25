@@ -37,8 +37,11 @@ translation = [
 ]
 dev = [
     "pytest",
-    "ruff",
+    "ruff==0.15.17",
 ]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
 
 [tool.setuptools]
 package-dir = {"" = "scripts"}
