@@ -108,6 +108,26 @@ V2.1 adds a standard source-site baseline and lightweight local knowledge assets
 - `nuoyan build-knowledge --task-id <task_id> --json` generates metric facts, topic index, dedup index and a literature graph.
 - `nuoyan source-quality --task-id <task_id> --json` audits no-result sources for possible false negatives, including single-query no-results, missing core-query attempts, overconstrained long queries and cross-source contradictions such as OpenAlex no-results while PubMed/PMC/LSR already has related literature.
 
+V2.2.0 adds a claim-level research integrity layer on top of materials, evidence cards and metric facts:
+
+- Search results and snippets are discovery leads. `import-finding --source web_search` records them as `retrieval_kind=search_result` and `content_verified=false` by default; they cannot support a research claim until the underlying page or document has been fetched and inspected.
+- `ResearchClaim` records claim type, support status, confidence, impact, inference and links to evidence cards or metric facts. High-impact supported claims require independent publishers; consensus claims require at least three.
+- `EvidenceConflict` preserves contradictory data, methods, regulatory status or source conclusions until an expert resolves or accepts the difference.
+- `ResearchIteration` records new verified materials, publishers, claims, changed claims and resolved gaps. Two zero-yield audits from different structural directions are required before research is considered saturated; repeating the same direction is rejected.
+- `ResearchPolicy` classifies task data as public, internal or confidential. Internal or confidential content cannot be routed to public retrieval providers, and secret-bearing or private-network URLs are rejected.
+
+Agent-only command entry points:
+
+```bash
+nuoyan set-research-policy --task-id <task_id> --policy <policy.json> --json
+nuoyan record-research-claim --task-id <task_id> --claim <claim.json> --json
+nuoyan record-evidence-conflict --task-id <task_id> --conflict <conflict.json> --json
+nuoyan record-research-iteration --task-id <task_id> --iteration <iteration.json> --json
+nuoyan research-integrity --task-id <task_id> --json
+```
+
+These controls are implemented and covered by deterministic tests. They have not yet been certified through a real sales or production research project; claim wording, publisher independence and conflict resolution still require qualified human review.
+
 ## NMPA Human-Assisted Collection
 
 NMPA competitor registration uses a human-assisted evidence workflow. Standard scenario and delivery commands generate a deterministic search plan; they do not run the legacy NMPA HTTP, Edge CDP or Playwright collectors. The user performs legal searches on the official NMPA page in their own browser and saves a visible screenshot or official export for every required query/category. The agent then records and imports those files:
@@ -143,9 +163,11 @@ The final verification command reports whether the package is ready for business
 nuoyan verify-package --task-id <task_id> --json
 ```
 
-Core fields are `delivery_artifacts_ready`, `v21_assets_ready`, `final_review_ready`, `scenario_coverage_ready`, `search_profile_ready`, `fallback_ready`, `network_ready`, `source_quality_ready` and `business_ready`.
+Core fields are `delivery_artifacts_ready`, `v21_assets_ready`, `final_review_ready`, `scenario_coverage_ready`, `search_profile_ready`, `fallback_ready`, `network_ready`, `source_quality_ready`, `research_integrity_required`, `research_integrity_ready` and `business_ready`.
 
-`business_ready=true` requires more than generated files. The package must have confirmed search scope, complete source coverage or documented fallback, V2.1 source-site and knowledge assets, reviewed evidence cards, and a valid standard delivery folder.
+`business_ready=true` requires more than generated files. The package must have confirmed search scope, complete source coverage or documented fallback, source-site and knowledge assets, reviewed evidence cards, reviewed claim-level evidence links, resolved conflicts, two distinct saturation audits, and a valid standard delivery folder.
+
+V2.2.0 adds claim-level traceability, contradiction preservation, source independence checks, research saturation state, data-boundary routing and search-result evidence downgrading. The HTML gap tab, Excel review workbook and trace package now expose the same research-integrity audit used by `verify-package`.
 
 V2.1.12 adds a Windows standard-environment installer and a strict `doctor --profile standard` gate. The gate checks the actual runtime path and version, conflicting legacy distributions, a launchable Playwright Chromium, the PDF toolchain, the Argos English-to-Chinese model, enabled Codex Life Science Research/Browser/Chrome plugins, and live public-source connectivity. Plugin cache presence alone no longer counts as an enabled capability.
 

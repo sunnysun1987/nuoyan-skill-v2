@@ -8,6 +8,11 @@ CLI 命令由 agent 调用：
 - `nuoyan show-status --task-id <task_id> --json`
 - `nuoyan update-confirmations --task-id <task_id> --values-json <json> --json`
 - `nuoyan source-quality --task-id <task_id> --json`
+- `nuoyan set-research-policy --task-id <task_id> --policy <policy.json> --json`
+- `nuoyan record-research-claim --task-id <task_id> --claim <claim.json> --json`
+- `nuoyan record-evidence-conflict --task-id <task_id> --conflict <conflict.json> --json`
+- `nuoyan record-research-iteration --task-id <task_id> --iteration <iteration.json> --json`
+- `nuoyan research-integrity --task-id <task_id> --json`
 - `nuoyan run-scenario --task-id <task_id> --scenario <scenario_id> --json`
 - `nuoyan nmpa-manual-plan --task-id <task_id> --json`
 - `nuoyan record-nmpa-manual-search --task-id <task_id> --record <search_record.json> --json`
@@ -15,7 +20,7 @@ CLI 命令由 agent 调用：
 - `nuoyan run-full-pipeline --task-id <task_id> [--network-preflight|--skip-network-preflight] --json`
 - `nuoyan run-delivery-pipeline --task-id <task_id> [--network-preflight|--skip-network-preflight] --json`
 - `nuoyan import-local --task-id <task_id> --path <path> --json`
-- `nuoyan import-finding --task-id <task_id> --title <title> --source <source> --source-url <url> --content <text> --material-type <type> --json`
+- `nuoyan import-finding --task-id <task_id> --title <title> --source <source> --source-url <url> --content <text> --material-type <type> [--retrieval-kind search_result|fetched_page|supplied_document] [--content-verified|--content-unverified] --json`
 - `nuoyan import-life-science-findings --task-id <task_id> --findings-json-file <json> --query <query> --json`
 - `nuoyan life-science-plan --task-id <task_id> --json`
 - `nuoyan import-literature-table --task-id <task_id> --path <csv_or_xlsx> --json`
@@ -46,7 +51,7 @@ CLI 命令由 agent 调用：
 
 不要让非 IT 业务用户直接阅读 JSON；agent 应把 JSON 转成中文状态说明。
 
-## V2.1 门禁契约
+## V2.2 门禁契约
 
 - `run-scenario` 执行正式来源场景前会检查检索画像；缺少必要确认项时返回 `needs_confirmation` 并以退出码 2 停止。
 - `doctor --network` 用于正式公网采集前的网络体检，必须区分 Python DNS、Python HTTPS 和系统 curl 通道。
@@ -56,8 +61,11 @@ CLI 命令由 agent 调用：
 - `import-nmpa-manual` 要求 `capture_complete=true`，并逐项校验查询、注册类别、精确结果数、NMPA 来源 URL、截图/官方导出文件和 SHA-256。清单或证据缺失时不得关闭来源。
 - NMPA 的 `no_results` 仅对应 `verified_no_results`：全部必要 attempt 已记录并验证、每项都有可见证据、每项结果数均为 0。用户未操作、未上传、页面受限或只导入通用线索时都不得判空。
 - `build-standard-delivery` 可生成草稿交付，但若检索画像缺失，会写入日志并由 `verify-package` 标记 `search_profile_ready=false`。
-- `verify-package` 必须输出 9 个核心门禁字段：`delivery_artifacts_ready`、`v21_assets_ready`、`final_review_ready`、`scenario_coverage_ready`、`search_profile_ready`、`fallback_ready`、`network_ready`、`source_quality_ready`、`business_ready`。
-- `business_ready` 由上述门禁共同约束；最终回复仍必须单独解释 9 个字段，避免把“文件已生成”误写为“业务已就绪”。
+- `verify-package` 必须输出 11 个核心门禁字段：`delivery_artifacts_ready`、`v21_assets_ready`、`final_review_ready`、`scenario_coverage_ready`、`search_profile_ready`、`fallback_ready`、`network_ready`、`source_quality_ready`、`research_integrity_required`、`research_integrity_ready`、`business_ready`。
+- `business_ready` 由上述门禁共同约束；最终回复必须解释未通过项，避免把“文件已生成”误写为“业务已就绪”。
+- 新任务默认启用研究完整性门禁。没有经过人工复核的研究论断、缺少独立来源的高影响结论、未处理冲突、搜索摘要充当证据或缺少两个不同方向的饱和审计时，`research_integrity_ready=false`。
+- `import-finding --source web_search` 默认按搜索线索入库，不能支撑研究论断。只有已读取正文时，agent 才能显式选择 `--retrieval-kind fetched_page --content-verified`。
+- 任务标为 `internal` 或 `confidential` 时，公共采集服务必须阻断；只有当前任务已授权且给出组织批准的内部路由时，才可走内部采集入口。
 - 采集失败后，agent 必须使用 `import-finding`、浏览器 workflow、重试或用户材料导入等动作形成兜底记录；缺少兜底记录时 `fallback_ready=false`。
 - 标准交付前必须生成 V2.1 资产：`source_sites_v21.json`、`knowledge/metric_facts.jsonl`、`knowledge/literature_graph.json`、`knowledge/topic_index.json`。缺失时 `v21_assets_ready=false`。
 - life-science-research 插件结果必须通过 `import-life-science-findings` 或等价桥接进入材料管线；不得只写在聊天摘要或报告段落中。

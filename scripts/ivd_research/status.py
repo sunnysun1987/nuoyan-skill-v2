@@ -7,6 +7,7 @@ from .constants import TAXONOMY_VERSION, WORKFLOW_VERSION
 from .jsonl import append_jsonl, read_json, read_jsonl, write_json
 from .models import RecommendedAction, ScenarioStatus, TaskState
 from .paths import new_task_dir, new_task_id
+from .research_integrity import ResearchPolicy
 from .scenarios.registry import all_scenarios
 
 
@@ -64,6 +65,7 @@ def init_task(topic: str, output_root: Path) -> TaskState:
         taxonomy_version=TAXONOMY_VERSION,
         confirmations=dict(DEFAULT_CONFIRMATIONS),
         scenario_statuses=statuses,
+        research_policy=ResearchPolicy().model_dump(mode="json"),
     )
     write_json(task_dir / "task.json", state.model_dump(mode="json"))
     ensure_jsonl_files(task_dir)
@@ -111,8 +113,11 @@ def ensure_jsonl_files(task_dir: Path) -> None:
         "data/report_evidence_view.jsonl",
         "data/review_imports.jsonl",
         "data/report_versions.jsonl",
+        "data/research_claims.jsonl",
+        "data/evidence_conflicts.jsonl",
         "logs/events.jsonl",
         "logs/debug.jsonl",
+        "logs/research_iterations.jsonl",
     ]:
         path = task_dir / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -132,6 +137,7 @@ def load_task(task_dir: Path) -> TaskState:
     confirmations = data.setdefault("confirmations", {})
     for key, value in DEFAULT_CONFIRMATIONS.items():
         confirmations.setdefault(key, value)
+    data.setdefault("research_policy", ResearchPolicy().model_dump(mode="json"))
     return TaskState.model_validate(data)
 
 

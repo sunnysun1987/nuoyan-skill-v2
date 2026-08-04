@@ -246,3 +246,4 @@ class TaskState(BaseModel):
     taxonomy_version: str
     confirmations: dict[str, Any] = Field(default_factory=dict)
     scenario_statuses: dict[str, ScenarioStatus] = Field(default_factory=dict)
+    research_policy: dict[str, Any] = Field(default_factory=dict)

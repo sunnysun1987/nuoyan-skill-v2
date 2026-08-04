@@ -10,7 +10,7 @@ from ivd_research.evidence import (
     export_evidence_card_files,
     generate_draft_evidence_cards,
 )
-from ivd_research.jsonl import append_jsonl, write_json
+from ivd_research.jsonl import append_jsonl, read_jsonl, write_json
 from ivd_research.models import Material
 from ivd_research.package import (
     build_standard_delivery,
@@ -20,6 +20,10 @@ from ivd_research.package import (
 )
 from ivd_research.project_profile import formal_scenarios_for
 from ivd_research.review_excel import export_review, import_review
+from ivd_research.research_integrity import (
+    record_research_claim,
+    record_research_iteration,
+)
 from ivd_research.source_adapters.life_science_research_bridge import import_life_science_findings
 from ivd_research.status import init_task
 from ivd_research.confirmations import update_confirmations
@@ -154,6 +158,42 @@ def _write_hcg_material_and_card(task_dir: Path) -> None:
     card_payload = card.model_dump(mode="json")
     append_jsonl(task_dir / "data" / "evidence_cards.jsonl", card_payload)
     export_evidence_card_files(task_dir, card_payload)
+
+
+def _complete_research_integrity(task_dir: Path) -> None:
+    reviewed_cards = list(read_jsonl(task_dir / "data" / "reviewed_evidence_cards.jsonl"))
+    included_ids = [
+        card["evidence_card_id"]
+        for card in reviewed_cards
+        if card.get("include_in_report")
+    ]
+    record_research_claim(
+        task_dir,
+        {
+            "claim_id": "CLM-000001",
+            "text": "现有证据支持继续开展研发验证。",
+            "claim_type": "research_judgement",
+            "status": "supported",
+            "evidence_card_ids": included_ids,
+            "confidence": "medium",
+            "needs_human_review": False,
+            "reviewed_at": "2026-08-04T00:00:00+08:00",
+            "reviewer_role": "研发专家",
+        },
+    )
+    for iteration_id, direction, axis in (
+        ("ITER-001", "反向证据审计", "claim_stance"),
+        ("ITER-002", "覆盖缺口审计", "coverage_gap"),
+    ):
+        record_research_iteration(
+            task_dir,
+            {
+                "iteration_id": iteration_id,
+                "direction": direction,
+                "pivot_axis": axis,
+                "quality_targets_met": True,
+            },
+        )
 
 
 def _mark_nmpa_verified_zero(task_dir: Path, task: dict) -> None:
@@ -582,6 +622,7 @@ def test_verify_package_accepts_reviewed_complete_offline_package(tmp_path: Path
     wb.save(workbook)
 
     import_result = import_review(task_dir, workbook)
+    _complete_research_integrity(task_dir)
     build_standard_delivery(task_dir)
     result = verify_package(task_dir)
 
@@ -592,6 +633,7 @@ def test_verify_package_accepts_reviewed_complete_offline_package(tmp_path: Path
     assert result["scenario_coverage_ready"] is True
     assert result["fallback_ready"] is True
     assert result["network_ready"] is True
+    assert result["research_integrity_ready"] is True
     assert result["business_ready"] is True
 
     Path(result["standard_delivery"]["report"]).unlink()

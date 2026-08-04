@@ -461,6 +461,30 @@
           </div>
         </div>
         {% endif %}
+        <div class="quality-audit-panel">
+          <h3>研究论证完整性</h3>
+          <p>
+            已登记 {{ research_integrity.claim_count }} 条研究论断、
+            {{ research_integrity.conflict_count }} 条证据冲突；
+            当前状态：{{ "已通过" if research_integrity.ready else "待补充或复核" }}。
+          </p>
+          {% if research_integrity.issues %}
+          <div class="quality-audit-list">
+            {% for issue in research_integrity.issues %}
+            <article class="quality-audit-item">
+              <div class="gap-card-head">
+                <span class="status-pill {{ 'danger' if issue.severity == 'high' else 'warn' }}">{{ "高风险" if issue.severity == "high" else "需复核" }}</span>
+                <span class="owner-pill">{{ issue.issue_type }}</span>
+              </div>
+              <p><b>发现</b>：{{ issue.finding }}</p>
+              <p><b>建议</b>：{{ issue.recommendation }}</p>
+            </article>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="empty-state compact">研究论断、证据关联、冲突处理和迭代饱和检查均已通过。</div>
+          {% endif %}
+        </div>
         <div class="gap-card-grid" id="gap-workbench">
           {% for row in collection_gap_rows %}
           <article class="gap-card">

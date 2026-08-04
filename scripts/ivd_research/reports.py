@@ -24,6 +24,7 @@ from .quality import (
     fallback_materials_for_scenario,
 )
 from .source_quality import build_source_quality_audit
+from .research_integrity import build_research_integrity_audit
 from .status import now_iso
 from .translation import (
     extract_parameters,
@@ -3244,6 +3245,7 @@ def build_standard_report(task_dir: Path, output: Path | None = None) -> dict:
         scenario_statuses=scenario_statuses,
         required_scenario_ids=required_scenarios,
     )
+    research_integrity = build_research_integrity_audit(task_dir, task=task)
     analysis = build_feasibility_analysis(
         analysis_materials,
         analysis_evidence_cards,
@@ -3561,6 +3563,7 @@ def build_standard_report(task_dir: Path, output: Path | None = None) -> dict:
         collection_gap_rows=collection_gap_rows,
         collection_gap_summary=collection_gap_summary,
         source_quality=source_quality,
+        research_integrity=research_integrity,
         analysis=analysis,
         business_decision=business_decision,
         evidence_map=evidence_map,

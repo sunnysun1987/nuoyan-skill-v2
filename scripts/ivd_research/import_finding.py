@@ -10,6 +10,7 @@ from typing import Any
 
 from .jsonl import append_jsonl, read_json, read_jsonl
 from .models import ManualCollectionState, Material
+from .research_integrity import validate_retrieval_policy, validate_retrieval_target
 from .status import (
     find_duplicate_material,
     load_task,
@@ -29,6 +30,15 @@ MATERIAL_TYPE_LABELS = {
     "local_import": "本地导入",
     "unknown": "未确认",
 }
+
+SEARCH_RESULT_SOURCES = {
+    "web_search",
+    "exa_search",
+    "native_search",
+    "search",
+}
+RETRIEVAL_KINDS = {"search_result", "fetched_page", "supplied_document"}
+INTERNAL_RETRIEVAL_SOURCES = {"internal_search", "internal_fetch", "local_import"}
 
 
 def _infer_material_type(title: str, content: str, hint: str) -> str:
@@ -117,13 +127,38 @@ def import_finding(
     evidence_strength: str = "needs_review",
     search_query: str = "",
     extra_raw_fields: dict[str, Any] | None = None,
+    retrieval_kind: str = "",
+    content_verified: bool | None = None,
 ) -> dict[str, Any]:
     """Import a single external finding as a material record.
 
     Returns a dict with material_id and relative_paths for downstream use.
     """
+    retrieval_kind = retrieval_kind or (
+        "search_result" if source in SEARCH_RESULT_SOURCES else "fetched_page"
+    )
+    if retrieval_kind not in RETRIEVAL_KINDS:
+        raise ValueError(
+            "retrieval_kind must be search_result, fetched_page, or supplied_document"
+        )
+    if content_verified is None:
+        content_verified = retrieval_kind != "search_result"
+    if retrieval_kind == "search_result" and content_verified:
+        raise ValueError("搜索结果摘要不能标记为已核验正文")
+
     material_type = _infer_material_type(title, content, material_type)
     task = read_json(task_dir / "task.json")
+    external_provider = source not in INTERNAL_RETRIEVAL_SOURCES
+    validate_retrieval_policy(
+        task.get("research_policy") or {},
+        external_provider=external_provider,
+    )
+    if source_url:
+        validate_retrieval_target(
+            source_url,
+            task.get("research_policy") or {},
+            external_provider=external_provider,
+        )
     task_id = str(task.get("task_id") or "")
     duplicate_keys = [
         f"identifier:{identifier.strip().lower()}"
@@ -165,10 +200,12 @@ def import_finding(
 
     # Build raw fields
     raw_fields: dict[str, Any] = {
+        **(extra_raw_fields or {}),
         "import_source": source,
         "summary": content[:500] if len(content) > 500 else content,
         "full_content_length": len(content),
-        **(extra_raw_fields or {}),
+        "retrieval_kind": retrieval_kind,
+        "content_verified": content_verified,
     }
     if identifier:
         raw_fields["identifier"] = identifier
@@ -187,6 +224,8 @@ def import_finding(
             "scenario_id": source,
             "source_url": source_url,
             "imported_via": "import-finding CLI",
+            "retrieval_kind": retrieval_kind,
+            "content_verified": content_verified,
         },
         collection_time=now_iso(),
         adapter_id="import_finding",
@@ -215,4 +254,6 @@ def import_finding(
         "evidence_strength": evidence_strength,
         "recorded": bool(recorded_materials),
         "scenario_status": scenario_status,
+        "retrieval_kind": retrieval_kind,
+        "content_verified": content_verified,
     }
