@@ -43,6 +43,7 @@ description: 用于 IVD 企业研发人员开展研发项目调研，组织调�
 - HTML 主报告采用研发筛选工作台；页签、目录、筛选器、证据锚点和字段规格读取 `references/report-rules.md`。
 - 报告把采集异常转为业务可读的缺口清单；具体展示和公开兜底规则读取 `references/report-rules.md`。
 - 项目分析必须聚合真实材料和证据卡，不得只输出固定模板，也不得带入上一项目的专属结论。
+- 经校验的 `data/report_sections.jsonl` 必须融合进标准六页签工作台，只替换对应的 17 章项目分析内容；不得用单页可行性报告覆盖主报告，不得因此丢失研发阅读入口、指标事实、核心必读文献、全部证据卡或资料缺口页签。
 - 初始标题与确认画像冲突时，以已确认的 `primary_query` 和关键词池为准。
 - V2.1 内置标准信源配置，运行时可通过 `source-sites` 导出。标准信源包括 CMDE、NMPA、国家标准平台、PatentHub、中华医学期刊、PubMed/PMC/OpenAlex、life-science-research 插件通道、本地导入和 Zotero 可选导入。信源配置必须进入 `90_系统追溯数据/01_原始材料数据_data/source_sites_v21.json`。
 - 范围确认后，如果课题涉及标志物、蛋白、基因、疾病机制、通路、临床试验、遗传证据或公共科学数据库线索，应调用 life-science-research 插件能力。插件结果不得停留在聊天摘要中，必须通过 `import-life-science-findings` 或等价桥接写入 Material、SourceRun、EvidenceCard 和本地知识索引。

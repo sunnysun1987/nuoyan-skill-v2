@@ -141,12 +141,29 @@
             {% for section in project_analysis_sections %}
             <article class="analysis-card" id="{{ section.id }}">
               <h2>{{ section.title }}</h2>
+              {% if section.facts %}
+              <div class="analysis-block analysis-facts">
+                <h3>事实证据</h3>
+                <ul class="fact-list">
+                  {% for fact in section.facts %}
+                  <li>{{ fact }}</li>
+                  {% endfor %}
+                </ul>
+              </div>
+              {% endif %}
               <div class="analysis-block">
                 <h3>分析</h3>
                 <p>{{ section.analysis }}</p>
               </div>
+              {% if section.evidence_strength_label or section.confidence_level %}
+              <div class="analysis-assurance" aria-label="证据强度和复核状态">
+                {% if section.evidence_strength_label %}<span>证据强度：{{ section.evidence_strength_label }}</span>{% endif %}
+                {% if section.confidence_level %}<span>可信度：{{ section.confidence_level }}</span>{% endif %}
+                <span>{{ section.review_status }}</span>
+              </div>
+              {% endif %}
               <div class="analysis-block">
-                <h3>当前依据</h3>
+                <h3>支撑证据</h3>
                 <p>{{ section.evidence }}</p>
                 {% if section.evidence_rows %}
                 <div class="analysis-evidence-panel" data-page-size="8">
@@ -188,8 +205,16 @@
                 {% endif %}
               </div>
               <div class="analysis-block gap">
-                <h3>待补判断依据</h3>
+                <h3>待确认事项 / 下一步补证</h3>
+                {% if section.gaps %}
+                <ul class="fact-list">
+                  {% for gap in section.gaps %}
+                  <li>{{ gap }}</li>
+                  {% endfor %}
+                </ul>
+                {% else %}
                 <p>{{ section.gap }}</p>
+                {% endif %}
               </div>
             </article>
             {% endfor %}

@@ -576,6 +576,59 @@ def test_standard_delivery_report_has_drilldown_navigation_and_metric_definition
     assert metrics_panel.select_one("#metric-facts") is not None
 
 
+def test_standard_delivery_merges_validated_report_sections_without_losing_workbench_tabs(
+    tmp_path: Path,
+):
+    task_dir = _task_dir(tmp_path)
+    _write_single_material_and_card(task_dir)
+    append_jsonl(
+        task_dir / "data" / "report_sections.jsonl",
+        {
+            "section_id": "SEC-01",
+            "section_title": "临床意义",
+            "facts": ["RSV 项目事实证据应出现在标准综合报告中。"],
+            "analysis": "这是基于项目材料生成的专项分析，不是规则模板结论。",
+            "evidence_gaps": ["仍需临床负责人复核适用人群。"],
+            "evidence_strength_summary": "strong",
+            "confidence_level": "高",
+            "supporting_evidence_refs": [
+                {
+                    "material_id": "MAT-000001",
+                    "evidence_card_id": "EC-000001",
+                    "excerpt": "p-tau217 is associated with Alzheimer pathology.",
+                }
+            ],
+            "needs_human_review": True,
+        },
+    )
+    export_review(task_dir)
+    build_standard_delivery(task_dir)
+
+    html = (task_dir / "交付目录" / "00_立项调研综合报告.html").read_text(
+        encoding="utf-8"
+    )
+    soup = BeautifulSoup(html, "html.parser")
+    analysis_card = soup.select_one("#analysis-1")
+
+    assert analysis_card is not None
+    assert "这是基于项目材料生成的专项分析" in analysis_card.get_text(" ", strip=True)
+    assert "RSV 项目事实证据应出现在标准综合报告中" in analysis_card.get_text(" ", strip=True)
+    assert "证据强度：强" in analysis_card.get_text(" ", strip=True)
+    assert "可信度：高" in analysis_card.get_text(" ", strip=True)
+    assert "待人工复核" in analysis_card.get_text(" ", strip=True)
+    assert len(analysis_card.select("tr[data-page-row]")) == 1
+    assert 'data-jump-target="evidence-card-EC-000001"' in str(analysis_card)
+    for panel_id in (
+        "tab-analysis",
+        "tab-reading",
+        "tab-metrics",
+        "tab-core",
+        "tab-screening",
+        "tab-gaps",
+    ):
+        assert soup.select_one(f"#{panel_id}") is not None
+
+
 def test_verify_package_requires_fallback_for_failed_formal_scenarios(tmp_path: Path):
     task_dir = _task_dir(tmp_path)
     update_confirmations(task_dir, FULL_CONFIRMATIONS)

@@ -1059,8 +1059,29 @@ a:hover { text-decoration: underline; }
 .analysis-block.gap h3 {
   border-left-color: var(--warn);
 }
+.analysis-block.analysis-facts {
+  background: #f8fbfb;
+  border: 1px solid #dcebec;
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
 .analysis-block p {
   color: var(--text-secondary);
+}
+.analysis-assurance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.analysis-assurance span {
+  background: #f4f6f9;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 9px;
 }
 .analysis-evidence-table-wrap {
   margin-top: 10px;
