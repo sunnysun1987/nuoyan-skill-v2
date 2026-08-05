@@ -380,6 +380,7 @@ def normalize_materials(
 def build_excluded_material_rows(materials: list[dict[str, Any]]) -> list[dict[str, Any]]:
     reason_labels = {
         "no_project_signal_in_material": "未匹配到当前项目的目标物或用途信号",
+        "animal_only_standard_for_human_project": "动物专用标准，不适用于当前人用项目",
     }
     rows: list[dict[str, Any]] = []
     for material in materials:

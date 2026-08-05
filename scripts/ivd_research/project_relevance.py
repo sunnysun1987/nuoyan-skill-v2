@@ -59,6 +59,13 @@ def assess_material_relevance(
         alias for alias in aliases if _contains_term(primary_text, alias)
     ]
     matched_context = [term for term in context_terms if _contains_term(text, term)]
+    if _is_animal_only_standard_for_human_project(material, confirmations or {}):
+        return {
+            "relevant": False,
+            "reason": "animal_only_standard_for_human_project",
+            "matched_aliases": matched_aliases[:8],
+            "matched_context_terms": matched_context[:8],
+        }
     relevant = bool(
         matched_primary_aliases
         or (matched_aliases and matched_context)
@@ -111,6 +118,8 @@ def material_relevance_text(material: dict[str, Any]) -> str:
         material.get("structured_summary"),
         raw.get("title"),
         raw.get("product_name"),
+        raw.get("standard_name"),
+        raw.get("trade"),
         raw.get("abstract"),
         raw.get("summary"),
         raw.get("keywords"),
@@ -119,6 +128,47 @@ def material_relevance_text(material: dict[str, Any]) -> str:
         raw.get("basic_info_text"),
     ]
     return " ".join(_flatten(value) for value in values if value)
+
+
+def _is_animal_only_standard_for_human_project(
+    material: dict[str, Any],
+    confirmations: dict[str, Any],
+) -> bool:
+    if str(material.get("source_scenario") or "") != "standards_current":
+        return False
+    profile_text = _normalize(
+        " ".join(
+            str(confirmations.get(key) or "")
+            for key in (
+                "primary_query",
+                "chinese_synonyms",
+                "english_keywords",
+                "intended_use",
+                "target_user",
+            )
+        )
+    )
+    human_profile_markers = ("human", "患者", "临床", "医院", "人用", "人体", "人腺病毒")
+    if not any(marker in profile_text for marker in human_profile_markers):
+        return False
+
+    raw = material.get("raw_fields") or {}
+    standard_text = _normalize(
+        " ".join(
+            str(value or "")
+            for value in (
+                material.get("title"),
+                raw.get("standard_name"),
+                raw.get("trade"),
+                raw.get("scope"),
+            )
+        )
+    )
+    animal_markers = ("动物疫病", "禽", "兽医", "畜牧", "猪", "牛", "羊", "犬", "猫")
+    human_material_markers = ("human", "人用", "人体", "临床", "患者", "医院", "人腺病毒")
+    return any(marker in standard_text for marker in animal_markers) and not any(
+        marker in standard_text for marker in human_material_markers
+    )
 
 
 def material_primary_relevance_text(material: dict[str, Any]) -> str:

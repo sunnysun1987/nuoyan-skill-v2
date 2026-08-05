@@ -122,6 +122,30 @@ def test_incomplete_profile_does_not_silently_exclude_every_material():
     assert result["reason"] == "insufficient_relevance_profile"
 
 
+def test_human_project_excludes_animal_only_standard():
+    material = {
+        "material_id": "MAT-ANIMAL-STANDARD",
+        "source_scenario": "standards_current",
+        "material_type": "standard",
+        "title": "DB37/T 4044-2020 禽腺病毒4型荧光定量PCR检测方法",
+        "raw_fields": {
+            "standard_name": "禽腺病毒4型荧光定量PCR检测方法",
+            "trade": "畜牧业",
+        },
+    }
+    confirmations = {
+        "primary_query": "人腺病毒呼吸道感染核酸检测试剂盒",
+        "chinese_synonyms": "人腺病毒；腺病毒；HAdV",
+        "english_keywords": "human adenovirus respiratory infection",
+        "intended_use": "用于有呼吸道感染症状患者的辅助诊断",
+    }
+
+    result = assess_material_relevance(material, confirmations)
+
+    assert result["relevant"] is False
+    assert result["reason"] == "animal_only_standard_for_human_project"
+
+
 def test_analysis_evidence_rows_exclude_cross_project_draft_cards():
     materials = normalize_materials(
         [MATERIALS[0], MATERIALS[1]],
