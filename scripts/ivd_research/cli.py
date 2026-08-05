@@ -406,6 +406,16 @@ def _merge_plan_results(results: list[ScenarioResult], attempts: list[dict]) -> 
             message_zh=message,
             collection_errors=collection_errors,
         )
+    if collection_errors:
+        return ScenarioResult(
+            status=FailureType.COLLECTION_FAILED.value,
+            materials=[],
+            failure_type=FailureType.COLLECTION_FAILED,
+            message_zh=(
+                f"{message} 采集通道存在访问或解析失败，不能判定未发现结果。"
+            ),
+            collection_errors=collection_errors,
+        )
     return ScenarioResult(
         status=base.status,
         materials=[],

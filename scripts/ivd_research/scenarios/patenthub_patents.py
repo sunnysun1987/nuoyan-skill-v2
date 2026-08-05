@@ -37,9 +37,9 @@ def collect(task_id, task_dir, params):
         no_result_markers=["没有找到", "暂无数据"],
         validation_rules=["专利条目包含标题、公开号或基本信息", *failure_modes],
     )
-    if result.status in {"needs_login", "permission_required"}:
+    if result.status in {"needs_login", "permission_required", "collection_failed"}:
         result.message_zh = (
-            f"{result.message_zh} 兜底动作：运行 open-browser-session "
+            f"{result.message_zh} 兜底动作：先重试公开检索；仍失败时运行 open-browser-session "
             "--scenario patenthub_patents --background，完成登录或真人验证后，"
             "重新运行 PatentHub 采集。"
         )

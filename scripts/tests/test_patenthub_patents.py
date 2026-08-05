@@ -127,6 +127,25 @@ def test_patenthub_http_restriction_records_executable_browser_fallback(
     assert "重新运行 PatentHub 采集" in result.message_zh
 
 
+def test_patenthub_transport_failure_records_retry_and_browser_fallback(
+    monkeypatch, tmp_path
+):
+    def fail_fetch(url):
+        raise OSError("DNS resolution failed")
+
+    monkeypatch.setattr("ivd_research.scenarios.site_collect.fetch_html", fail_fetch)
+
+    result = collect(
+        task_id="TASK-001",
+        task_dir=tmp_path,
+        params={"query": "甲型流感", "material_id": "MAT-000001"},
+    )
+
+    assert result.status == "collection_failed"
+    assert "重试" in result.message_zh
+    assert "open-browser-session" in result.message_zh
+
+
 def test_patenthub_detail_failure_is_not_reported_as_no_results():
     status, _ = browser_collect.patenthub_collection_outcome(
         entry_count=1,

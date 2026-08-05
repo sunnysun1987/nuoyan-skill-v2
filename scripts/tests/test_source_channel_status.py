@@ -132,6 +132,30 @@ def test_merge_plan_results_preserves_partial_failure_status():
     assert merged.collection_errors == [{"status": "collection_failed", "reason": "timeout"}]
 
 
+def test_merge_plan_results_does_not_turn_transport_failures_into_no_results():
+    merged = _merge_plan_results(
+        [
+            ScenarioResult(
+                status=FailureType.NO_RESULTS.value,
+                failure_type=FailureType.NO_RESULTS,
+                message_zh="页面未解析到匹配条目。",
+                collection_errors=[
+                    {
+                        "status": "collection_failed",
+                        "reason": "DNS resolution failed",
+                    }
+                ],
+            )
+        ],
+        [{"query_role": "core", "status": "no_results"}],
+    )
+
+    assert merged is not None
+    assert merged.status == FailureType.COLLECTION_FAILED.value
+    assert merged.failure_type == FailureType.COLLECTION_FAILED
+    assert "不能判定未发现结果" in merged.message_zh
+
+
 def _hcg_confirmations() -> dict:
     return {
         "task_info": True,
