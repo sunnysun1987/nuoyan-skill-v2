@@ -5,6 +5,7 @@ import zipfile
 from pathlib import Path
 
 from .jsonl import count_jsonl_rows, read_jsonl, write_json
+from .nmpa_manual_contract import nmpa_manual_gate_warnings
 from .paths import safe_topic
 from .project_profile import (
     NETWORK_SENSITIVE_SCENARIOS,
@@ -12,6 +13,7 @@ from .project_profile import (
     profile_text,
 )
 from .quality import build_collection_alerts
+from .research_integrity import build_research_integrity_audit
 from .source_quality import build_source_quality_audit
 from .status import now_iso
 
@@ -325,6 +327,11 @@ def build_standard_delivery(task_dir: Path) -> dict:
 
     knowledge_result = build_literature_knowledge(task_dir)
     translation_result = translation_status(task_dir)
+    research_integrity_result = build_research_integrity_audit(task_dir)
+    write_json(
+        task_dir / "logs" / "research_integrity_audit.json",
+        research_integrity_result,
+    )
 
     report_result = build_standard_report(task_dir, output=paths["report"])
     report_ok = Path(report_result["report_path"]).exists()
@@ -379,6 +386,7 @@ def build_standard_delivery(task_dir: Path) -> dict:
         "evidence_card_count": evidence_card_count,
         "knowledge": knowledge_result,
         "translation": translation_result,
+        "research_integrity": research_integrity_result,
         "top_level_entries": top_level_entries,
         "topic_safe_name": safe_topic(
             json.loads((task_dir / "task.json").read_text(encoding="utf-8")).get("topic", "")
@@ -415,6 +423,8 @@ def scenario_coverage_warnings(task_dir: Path) -> list[str]:
                 f"正式场景 {scenario_id} 当前状态为 {status}，不能判定业务可交付。{last_message}"
             )
             continue
+        if scenario_id == "nmpa_competitor":
+            warnings.extend(nmpa_manual_gate_warnings(task_dir, scenario))
         if status == "no_results" and not last_message:
             warnings.append(
                 f"正式场景 {scenario_id} 为 no_results 但缺少说明，不能判定业务可交付。"
@@ -676,6 +686,7 @@ def verify_package(task_dir: Path) -> dict:
         scenario_statuses=scenario_statuses,
         required_scenario_ids=formal_scenarios_for(task),
     )
+    research_integrity = build_research_integrity_audit(task_dir, task=task)
     life_science = life_science_coverage(task_dir, task)
     life_science_gate_warnings = life_science_warnings(life_science)
     network_preflight = latest_network_preflight(task_dir)
@@ -744,6 +755,11 @@ def verify_package(task_dir: Path) -> dict:
             warnings.append(
                 f"采集质量审计：{issue.get('source')} {issue.get('finding')} {issue.get('recommendation')}"
             )
+    for issue in research_integrity.get("issues", []):
+        warnings.append(
+            "研究完整性审计："
+            f"{issue.get('finding', '')} 建议：{issue.get('recommendation', '')}"
+        )
     warnings.extend(network_warnings(network_preflight))
     scenario_coverage_ready = not coverage_warnings
     search_profile_ready = not missing_confirmations
@@ -754,6 +770,8 @@ def verify_package(task_dir: Path) -> dict:
         or not network_unresolved_scenarios
     )
     source_quality_ready = bool(source_quality.get("ready", False))
+    research_integrity_required = bool(research_integrity.get("required", True))
+    research_integrity_ready = bool(research_integrity.get("ready", False))
     v21_assets_ready = (
         source_sites_path.exists()
         and literature_graph_path.exists()
@@ -768,6 +786,7 @@ def verify_package(task_dir: Path) -> dict:
         and fallback_ready
         and network_ready
         and source_quality_ready
+        and (not research_integrity_required or research_integrity_ready)
     )
     counts = {
         "materials": material_count,
@@ -791,6 +810,8 @@ def verify_package(task_dir: Path) -> dict:
         "fallback_ready": fallback_ready,
         "network_ready": network_ready,
         "source_quality_ready": source_quality_ready,
+        "research_integrity_required": research_integrity_required,
+        "research_integrity_ready": research_integrity_ready,
         "life_science_coverage": life_science,
         "network_preflight": network_preflight,
         "network_unresolved_scenarios": network_unresolved_scenarios,
@@ -798,6 +819,7 @@ def verify_package(task_dir: Path) -> dict:
         "counts": counts,
         "collection_alerts": collection_alerts,
         "source_quality": source_quality,
+        "research_integrity": research_integrity,
         "standard_delivery": {
             "delivery_dir": str(delivery_paths["delivery_dir"]),
             "report": str(delivery_paths["report"]),
@@ -822,6 +844,8 @@ def verify_package(task_dir: Path) -> dict:
         "fallback_ready": fallback_ready,
         "network_ready": network_ready,
         "source_quality_ready": source_quality_ready,
+        "research_integrity_required": research_integrity_required,
+        "research_integrity_ready": research_integrity_ready,
         "life_science_coverage": life_science,
         "network_preflight": network_preflight,
         "network_unresolved_scenarios": network_unresolved_scenarios,
@@ -830,6 +854,7 @@ def verify_package(task_dir: Path) -> dict:
         "standard_delivery": manifest["standard_delivery"],
         "collection_alerts": collection_alerts,
         "source_quality": source_quality,
+        "research_integrity": research_integrity,
         "missing": missing,
         "warnings": warnings,
         "manifest_path": str(manifest_path),

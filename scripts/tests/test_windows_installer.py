@@ -43,6 +43,6 @@ def test_windows_runtime_is_documented_for_agent_not_business_user():
 def test_windows_environment_release_has_distinct_version():
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
-    assert project["project"]["version"] == "2.1.12"
-    assert "v2.1.12" in WORKFLOW_VERSION
-    assert "V2.1.12" in (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    assert project["project"]["version"] == "2.2.1"
+    assert "v2.2.1" in WORKFLOW_VERSION
+    assert "V2.2.1" in (REPO_ROOT / "README.md").read_text(encoding="utf-8")

@@ -8,13 +8,16 @@ to the CLI-driven HTML/Excel/zip pipeline.
 from pathlib import Path
 from typing import Any
 
-from .jsonl import read_json
-from .models import Material
+from .jsonl import append_jsonl, read_json, read_jsonl
+from .models import ManualCollectionState, Material
+from .research_integrity import validate_retrieval_policy, validate_retrieval_target
 from .status import (
     find_duplicate_material,
+    load_task,
     next_material_id,
     now_iso,
     record_materials,
+    save_task,
 )
 
 
@@ -27,6 +30,15 @@ MATERIAL_TYPE_LABELS = {
     "local_import": "本地导入",
     "unknown": "未确认",
 }
+
+SEARCH_RESULT_SOURCES = {
+    "web_search",
+    "exa_search",
+    "native_search",
+    "search",
+}
+RETRIEVAL_KINDS = {"search_result", "fetched_page", "supplied_document"}
+INTERNAL_RETRIEVAL_SOURCES = {"internal_search", "internal_fetch", "local_import"}
 
 
 def _infer_material_type(title: str, content: str, hint: str) -> str:
@@ -47,6 +59,60 @@ def _infer_material_type(title: str, content: str, hint: str) -> str:
     return "literature"
 
 
+def _update_scenario_after_import(
+    task_dir: Path,
+    task_payload: dict[str, Any],
+    *,
+    source: str,
+) -> str:
+    if not isinstance(task_payload.get("scenario_statuses"), dict):
+        return ""
+    state = load_task(task_dir)
+    scenario = state.scenario_statuses.get(source)
+    if scenario is None:
+        return ""
+    scenario.material_count = sum(
+        1
+        for material in read_jsonl(task_dir / "data" / "materials.jsonl")
+        if material.get("source_scenario") == source
+    )
+    if source == "nmpa_competitor":
+        if scenario.manual_collection is None:
+            scenario.manual_collection = ManualCollectionState(
+                phase="not_started",
+                last_updated=now_iso(),
+            )
+        if scenario.manual_collection.phase == "verified_no_results":
+            scenario.manual_collection.phase = "awaiting_import"
+            scenario.manual_collection.zero_results_verified = False
+            scenario.manual_collection.last_updated = now_iso()
+        closed_positive_phases = {"completed", "completed_with_warnings"}
+        if scenario.manual_collection.phase not in closed_positive_phases:
+            scenario.status = "needs_manual_review"
+            scenario.last_message = (
+                "通用 import-finding 导入的 NMPA 材料仅作为待复核线索；"
+                "仍须完成 NMPA 专用人工导入、可见证据核验和计划覆盖，才能关闭信源。"
+            )
+    else:
+        scenario.status = "completed"
+        scenario.last_message = (
+            f"通过 {source} 可见官方页面/外部发现导入材料，"
+            f"当前累计 {scenario.material_count} 条。"
+        )
+    save_task(state)
+    append_jsonl(
+        task_dir / "logs" / "events.jsonl",
+        {
+            "time": now_iso(),
+            "event": "import_finding_scenario_updated",
+            "scenario_id": source,
+            "status": scenario.status,
+            "material_count": scenario.material_count,
+        },
+    )
+    return scenario.status
+
+
 def import_finding(
     task_dir: Path,
     *,
@@ -61,13 +127,38 @@ def import_finding(
     evidence_strength: str = "needs_review",
     search_query: str = "",
     extra_raw_fields: dict[str, Any] | None = None,
+    retrieval_kind: str = "",
+    content_verified: bool | None = None,
 ) -> dict[str, Any]:
     """Import a single external finding as a material record.
 
     Returns a dict with material_id and relative_paths for downstream use.
     """
+    retrieval_kind = retrieval_kind or (
+        "search_result" if source in SEARCH_RESULT_SOURCES else "fetched_page"
+    )
+    if retrieval_kind not in RETRIEVAL_KINDS:
+        raise ValueError(
+            "retrieval_kind must be search_result, fetched_page, or supplied_document"
+        )
+    if content_verified is None:
+        content_verified = retrieval_kind != "search_result"
+    if retrieval_kind == "search_result" and content_verified:
+        raise ValueError("搜索结果摘要不能标记为已核验正文")
+
     material_type = _infer_material_type(title, content, material_type)
     task = read_json(task_dir / "task.json")
+    external_provider = source not in INTERNAL_RETRIEVAL_SOURCES
+    validate_retrieval_policy(
+        task.get("research_policy") or {},
+        external_provider=external_provider,
+    )
+    if source_url:
+        validate_retrieval_target(
+            source_url,
+            task.get("research_policy") or {},
+            external_provider=external_provider,
+        )
     task_id = str(task.get("task_id") or "")
     duplicate_keys = [
         f"identifier:{identifier.strip().lower()}"
@@ -84,6 +175,11 @@ def import_finding(
         },
     )
     if duplicate:
+        scenario_status = _update_scenario_after_import(
+            task_dir,
+            task,
+            source=source,
+        )
         return {
             "material_id": duplicate.get("material_id", ""),
             "material_type": duplicate.get("material_type", material_type),
@@ -91,6 +187,7 @@ def import_finding(
             "taxonomy_tags": taxonomy_tags or [],
             "evidence_strength": evidence_strength,
             "recorded": False,
+            "scenario_status": scenario_status,
         }
     material_id = next_material_id(task_dir)
 
@@ -103,10 +200,12 @@ def import_finding(
 
     # Build raw fields
     raw_fields: dict[str, Any] = {
+        **(extra_raw_fields or {}),
         "import_source": source,
         "summary": content[:500] if len(content) > 500 else content,
         "full_content_length": len(content),
-        **(extra_raw_fields or {}),
+        "retrieval_kind": retrieval_kind,
+        "content_verified": content_verified,
     }
     if identifier:
         raw_fields["identifier"] = identifier
@@ -125,6 +224,8 @@ def import_finding(
             "scenario_id": source,
             "source_url": source_url,
             "imported_via": "import-finding CLI",
+            "retrieval_kind": retrieval_kind,
+            "content_verified": content_verified,
         },
         collection_time=now_iso(),
         adapter_id="import_finding",
@@ -139,23 +240,11 @@ def import_finding(
     materials = [material]
     recorded_materials = record_materials(task_dir, materials)
 
-    # Update scenario_statuses so the Scenario Coverage table in reports
-    # reflects materials imported via import-finding (not just CLI collection).
-    try:
-        from .status import load_task, save_task
-
-        state = load_task(task_dir)
-        scenario = state.scenario_statuses.get(source)
-        if scenario is not None:
-            scenario.material_count += len(recorded_materials)
-            scenario.status = "completed"
-            scenario.last_message = (
-                f"通过 {source} 可见官方页面/外部发现导入材料，"
-                f"当前累计 {scenario.material_count} 条。"
-            )
-            save_task(state)
-    except Exception:
-        pass  # Non-critical: report scenario coverage may lag, but materials are safe.
+    scenario_status = _update_scenario_after_import(
+        task_dir,
+        task,
+        source=source,
+    )
 
     return {
         "material_id": material_id,
@@ -164,4 +253,7 @@ def import_finding(
         "taxonomy_tags": taxonomy_tags or [],
         "evidence_strength": evidence_strength,
         "recorded": bool(recorded_materials),
+        "scenario_status": scenario_status,
+        "retrieval_kind": retrieval_kind,
+        "content_verified": content_verified,
     }

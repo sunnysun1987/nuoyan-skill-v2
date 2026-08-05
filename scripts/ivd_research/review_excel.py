@@ -11,6 +11,7 @@ from .jsonl import append_jsonl, read_jsonl, write_json
 from .constants import EVIDENCE_STRENGTH_LABELS
 from .quality import build_collection_alerts
 from .source_quality import build_source_quality_audit
+from .research_integrity import build_research_integrity_audit
 from .project_profile import formal_scenarios_for
 from .status import load_task
 
@@ -212,6 +213,10 @@ def export_review(task_dir: Path) -> dict:
         scenario_statuses=scenario_statuses,
         required_scenario_ids=required_scenarios,
     )
+    research_integrity = build_research_integrity_audit(
+        task_dir,
+        task=task.model_dump(mode="json"),
+    )
     wb = Workbook()
     wb.remove(wb.active)
 
@@ -224,6 +229,8 @@ def export_review(task_dir: Path) -> dict:
     alerts_ws.append(["失败场景数", collection_alerts["failed_count"]])
     alerts_ws.append(["公开兜底部分补齐场景数", collection_alerts.get("fallback_covered_count", 0)])
     alerts_ws.append(["疑似假阴性高风险数", source_quality.get("high_count", 0)])
+    alerts_ws.append(["研究论断数", research_integrity.get("claim_count", 0)])
+    alerts_ws.append(["未处理研究完整性问题数", len(research_integrity.get("issues", []))])
     alerts_ws.append(["未启动场景数", collection_alerts["not_started_count"]])
     alerts_ws.append([])
     alerts_ws.append(["必须先处理的问题", ""])
@@ -240,6 +247,42 @@ def export_review(task_dir: Path) -> dict:
             [
                 issue.get("severity", ""),
                 f"{issue.get('source', '')}：{issue.get('finding', '')} 建议：{issue.get('recommendation', '')}",
+            ]
+        )
+
+    integrity_ws = wb.create_sheet("论断与冲突")
+    integrity_ws.append(["记录类型", "ID/级别", "内容", "状态", "关联证据", "处理建议"])
+    for claim in read_jsonl(task_dir / "data" / "research_claims.jsonl"):
+        integrity_ws.append(
+            [
+                "研究论断",
+                claim.get("claim_id", ""),
+                claim.get("text", ""),
+                claim.get("status", ""),
+                "；".join(claim.get("evidence_card_ids") or []),
+                claim.get("review_note", "") or ("待人工复核" if claim.get("needs_human_review", True) else ""),
+            ]
+        )
+    for conflict in read_jsonl(task_dir / "data" / "evidence_conflicts.jsonl"):
+        integrity_ws.append(
+            [
+                "证据冲突",
+                conflict.get("conflict_id", ""),
+                conflict.get("summary", ""),
+                conflict.get("resolution_status", ""),
+                "；".join(conflict.get("evidence_card_ids") or []),
+                conflict.get("resolution_note", "") or "待明确差异原因和处理结论",
+            ]
+        )
+    for issue in research_integrity.get("issues", []):
+        integrity_ws.append(
+            [
+                "审计问题",
+                issue.get("severity", ""),
+                issue.get("finding", ""),
+                issue.get("issue_type", ""),
+                "",
+                issue.get("recommendation", ""),
             ]
         )
 

@@ -24,6 +24,12 @@ from .import_finding import import_finding
 from .knowledge.literature_graph import build_literature_knowledge
 from .local_import import import_local
 from .models import FailureType, Material
+from .nmpa_manual import (
+    collect as nmpa_manual_collect,
+    import_nmpa_manual,
+    prepare_nmpa_manual_plan,
+    record_nmpa_manual_search,
+)
 from .paths import default_output_root
 from .package import (
     build_standard_delivery,
@@ -37,11 +43,18 @@ from .query_plan import (
     scenario_query_plans,
 )
 from .reports import build_report
+from .research_integrity import (
+    ResearchPolicy,
+    build_research_integrity_audit,
+    record_evidence_conflict,
+    record_research_claim,
+    record_research_iteration,
+    validate_retrieval_policy,
+)
 from .review_excel import export_review, import_review
 from .scenarios import (
     cma_lab_management,
     cmde_regulatory,
-    nmpa_competitor,
     patenthub_patents,
     openalex_literature,
     pubmed_pmc,
@@ -161,9 +174,37 @@ def enforce_business_confirmations(state, *, action: str, json_output: bool) -> 
     emit(confirmation_gate_payload(state, action=action), json_output)
     raise typer.Exit(code=2)
 
+
+def enforce_public_collection_policy(state, *, action: str, json_output: bool) -> None:
+    try:
+        validate_retrieval_policy(
+            state.research_policy,
+            external_provider=True,
+        )
+    except ValueError as exc:
+        payload = {
+            "status": "data_boundary_blocked",
+            "action": action,
+            "data_classification": state.research_policy.get(
+                "data_classification",
+                "",
+            ),
+            "message_zh": str(exc),
+        }
+        append_jsonl(
+            Path(state.task_dir) / "logs" / "events.jsonl",
+            {
+                "time": now_iso(),
+                "event": "public_collection_blocked",
+                **payload,
+            },
+        )
+        emit(payload, json_output)
+        raise typer.Exit(code=2) from exc
+
 SCENARIO_COLLECTORS = {
     "cmde_regulatory": cmde_regulatory.collect,
-    "nmpa_competitor": nmpa_competitor.collect,
+    "nmpa_competitor": nmpa_manual_collect,
     "standards_current": standards_current.collect,
     "patenthub_patents": patenthub_patents.collect,
     "yiigle_zhjyyxzz": yiigle_zhjyyxzz.collect,
@@ -177,8 +218,11 @@ SCENARIO_COLLECTORS = {
     "local_import": local_import_adapter.collect,
 }
 
+DELIVERY_MANUAL_SCENARIOS = [
+    "nmpa_competitor",
+]
+
 DELIVERY_HTTP_SCENARIOS = [
-    "nmpa_competitor",    # now self-contained: HTTP → Edge CDP fallback in collect()
     "standards_current",
     "yiigle_zhjyyxzz",
     "yiigle_zhsjkzz",
@@ -204,6 +248,24 @@ def emit(payload: dict, as_json: bool) -> None:
             typer.echo(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True))
     else:
         typer.echo(payload)
+
+
+def _prepare_nmpa_manual_for_action(task_dir: Path, *, action: str) -> dict:
+    result = prepare_nmpa_manual_plan(task_dir)
+    result["action"] = action
+    append_jsonl(
+        task_dir / "logs" / "events.jsonl",
+        {
+            "time": now_iso(),
+            "event": "nmpa_manual_plan_prepared",
+            "scenario_id": "nmpa_competitor",
+            "action": action,
+            "status": result["status"],
+            "manual_phase": result["manual_phase"],
+            "plan_path": result["plan_path"],
+        },
+    )
+    return result
 
 
 def _supports_kwarg(func, name: str) -> bool:
@@ -553,6 +615,168 @@ def source_quality_command(
     emit(build_source_quality_audit(task_dir), json_output)
 
 
+def _read_json_object(path: Path, option_name: str) -> dict:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, JSONDecodeError) as exc:
+        raise typer.BadParameter(f"{option_name} 必须指向可读取的 JSON 文件") from exc
+    if not isinstance(payload, dict):
+        raise typer.BadParameter(f"{option_name} 的 JSON 顶层必须是对象")
+    return payload
+
+
+@app.command("record-research-claim")
+def record_research_claim_command(
+    task_id: str = typer.Option(..., "--task-id"),
+    claim: Path = typer.Option(..., "--claim"),
+    output_root: Optional[Path] = typer.Option(None, "--output-root"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    root = output_root or default_output_root()
+    task_dir = find_task(root, task_id)
+    try:
+        result = record_research_claim(task_dir, _read_json_object(claim, "--claim"))
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--claim") from exc
+    emit(result, json_output)
+
+
+@app.command("record-evidence-conflict")
+def record_evidence_conflict_command(
+    task_id: str = typer.Option(..., "--task-id"),
+    conflict: Path = typer.Option(..., "--conflict"),
+    output_root: Optional[Path] = typer.Option(None, "--output-root"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    root = output_root or default_output_root()
+    task_dir = find_task(root, task_id)
+    try:
+        result = record_evidence_conflict(
+            task_dir,
+            _read_json_object(conflict, "--conflict"),
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--conflict") from exc
+    emit(result, json_output)
+
+
+@app.command("record-research-iteration")
+def record_research_iteration_command(
+    task_id: str = typer.Option(..., "--task-id"),
+    iteration: Path = typer.Option(..., "--iteration"),
+    output_root: Optional[Path] = typer.Option(None, "--output-root"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    root = output_root or default_output_root()
+    task_dir = find_task(root, task_id)
+    try:
+        result = record_research_iteration(
+            task_dir,
+            _read_json_object(iteration, "--iteration"),
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--iteration") from exc
+    emit(result, json_output)
+
+
+@app.command("set-research-policy")
+def set_research_policy_command(
+    task_id: str = typer.Option(..., "--task-id"),
+    policy: Path = typer.Option(..., "--policy"),
+    output_root: Optional[Path] = typer.Option(None, "--output-root"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    root = output_root or default_output_root()
+    task_dir = find_task(root, task_id)
+    try:
+        validated = ResearchPolicy.model_validate(
+            _read_json_object(policy, "--policy")
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--policy") from exc
+    state = load_task(task_dir)
+    state.research_policy = validated.model_dump(mode="json")
+    save_task(state)
+    append_jsonl(
+        task_dir / "logs" / "events.jsonl",
+        {
+            "time": now_iso(),
+            "event": "research_policy_updated",
+            "data_classification": validated.data_classification,
+            "external_provider_allowed": validated.external_provider_allowed,
+            "message_zh": "研究数据边界策略已更新。",
+        },
+    )
+    emit(state.research_policy, json_output)
+
+
+@app.command("research-integrity")
+def research_integrity_command(
+    task_id: str = typer.Option(..., "--task-id"),
+    output_root: Optional[Path] = typer.Option(None, "--output-root"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    root = output_root or default_output_root()
+    task_dir = find_task(root, task_id)
+    emit(build_research_integrity_audit(task_dir), json_output)
+
+
+@app.command("nmpa-manual-plan")
+def nmpa_manual_plan_command(
+    task_id: str = typer.Option(..., "--task-id"),
+    output_root: Optional[Path] = typer.Option(None, "--output-root"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    root = output_root or default_output_root()
+    task_dir = find_task(root, task_id)
+    state = load_task(task_dir)
+    enforce_business_confirmations(
+        state,
+        action="nmpa_manual_plan",
+        json_output=json_output,
+    )
+    try:
+        result = _prepare_nmpa_manual_for_action(
+            task_dir,
+            action="nmpa_manual_plan",
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    emit(result, json_output)
+
+
+@app.command("record-nmpa-manual-search")
+def record_nmpa_manual_search_command(
+    task_id: str = typer.Option(..., "--task-id"),
+    record: Path = typer.Option(..., "--record"),
+    output_root: Optional[Path] = typer.Option(None, "--output-root"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    root = output_root or default_output_root()
+    task_dir = find_task(root, task_id)
+    try:
+        result = record_nmpa_manual_search(task_dir, record)
+    except (FileNotFoundError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    emit(result, json_output)
+
+
+@app.command("import-nmpa-manual")
+def import_nmpa_manual_command(
+    task_id: str = typer.Option(..., "--task-id"),
+    manifest: Path = typer.Option(..., "--manifest"),
+    output_root: Optional[Path] = typer.Option(None, "--output-root"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    root = output_root or default_output_root()
+    task_dir = find_task(root, task_id)
+    try:
+        result = import_nmpa_manual(task_dir, manifest)
+    except (FileNotFoundError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    emit(result, json_output)
+
+
 @app.command("run-scenario")
 def run_scenario_command(
     task_id: str = typer.Option(..., "--task-id"),
@@ -564,6 +788,11 @@ def run_scenario_command(
     task_dir = find_task(root, task_id)
     state = load_task(task_dir)
     if scenario in SCENARIO_COLLECTORS and scenario != "local_import":
+        enforce_public_collection_policy(
+            state,
+            action=f"run_scenario:{scenario}",
+            json_output=json_output,
+        )
         enforce_business_confirmations(
             state,
             action=f"run_scenario:{scenario}",
@@ -581,6 +810,13 @@ def run_scenario_command(
             state.scenario_statuses[scenario].last_message = result.message_zh
             save_task(state)
         emit(result.model_dump(mode="json"), json_output)
+        return
+    if scenario == "nmpa_competitor":
+        result = _prepare_nmpa_manual_for_action(
+            task_dir,
+            action="run_scenario:nmpa_competitor",
+        )
+        emit(result, json_output)
         return
     plans = plans_by_scenario.get(scenario) or default_query_plan(state)
     collector = SCENARIO_COLLECTORS.get(scenario)
@@ -625,6 +861,16 @@ def import_finding_command(
     search_query: str = typer.Option("", "--search-query"),
     identifier: str = typer.Option("", "--identifier"),
     publication_date: str = typer.Option("", "--publication-date"),
+    retrieval_kind: str = typer.Option(
+        "",
+        "--retrieval-kind",
+        help="证据取得方式：search_result、fetched_page 或 supplied_document。",
+    ),
+    content_verified: Optional[bool] = typer.Option(
+        None,
+        "--content-verified/--content-unverified",
+        help="是否已读取并核验底层正文；搜索摘要不得标记为已核验。",
+    ),
     output_root: Optional[Path] = typer.Option(None, "--output-root"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
@@ -647,6 +893,8 @@ def import_finding_command(
         search_query=search_query,
         identifier=identifier,
         publication_date=publication_date,
+        retrieval_kind=retrieval_kind,
+        content_verified=content_verified,
     )
     emit(result, json_output)
 
@@ -679,6 +927,12 @@ def import_life_science_findings_command(
 ) -> None:
     root = output_root or default_output_root()
     task_dir = find_task(root, task_id)
+    state = load_task(task_dir)
+    enforce_public_collection_policy(
+        state,
+        action="import_life_science_findings",
+        json_output=json_output,
+    )
     try:
         payload = json.loads(findings_json_file.read_text(encoding="utf-8-sig"))
     except JSONDecodeError as exc:
@@ -966,6 +1220,11 @@ def run_full_pipeline_command(
     state = load_task(task_dir)
     collection_results = []
     if not skip_collection:
+        enforce_public_collection_policy(
+            state,
+            action="run_full_pipeline",
+            json_output=json_output,
+        )
         enforce_business_confirmations(
             state,
             action="run_full_pipeline",
@@ -994,8 +1253,17 @@ def run_full_pipeline_command(
     if not skip_collection:
         plans_by_scenario = scenario_query_plans(state)
         _defer_inapplicable_scenarios(state, plans_by_scenario)
+        save_task(state)
         for scenario, collector in SCENARIO_COLLECTORS.items():
             if scenario == "local_import" or scenario not in plans_by_scenario:
+                continue
+            if scenario == "nmpa_competitor":
+                manual_result = _prepare_nmpa_manual_for_action(
+                    task_dir,
+                    action="run_full_pipeline",
+                )
+                collection_results.append(manual_result)
+                state = load_task(task_dir)
                 continue
             result, attempts, raw_results = _collect_scenario_plans(
                 task_id=task_id,
@@ -1067,6 +1335,12 @@ def run_delivery_pipeline_command(
     state = load_task(task_dir)
     plans_by_scenario = scenario_query_plans(state)
     collection_results = []
+    if not skip_collection:
+        enforce_public_collection_policy(
+            state,
+            action="run_delivery_pipeline",
+            json_output=json_output,
+        )
     missing_confirmations = missing_business_confirmations(state)
     if missing_confirmations and not skip_collection:
         emit(confirmation_gate_payload(state, action="run_delivery_pipeline"), json_output)
@@ -1090,6 +1364,16 @@ def run_delivery_pipeline_command(
             action="run_delivery_pipeline",
         )
         deferred_scenarios = _defer_inapplicable_scenarios(state, plans_by_scenario)
+        save_task(state)
+        for scenario in DELIVERY_MANUAL_SCENARIOS:
+            if scenario not in plans_by_scenario:
+                continue
+            manual_result = _prepare_nmpa_manual_for_action(
+                task_dir,
+                action="run_delivery_pipeline",
+            )
+            collection_results.append(manual_result)
+            state = load_task(task_dir)
         for scenario in DELIVERY_BROWSER_SCENARIOS:
             if scenario not in plans_by_scenario:
                 continue
@@ -1319,6 +1603,12 @@ def probe_browser_workflow_command(
 ) -> None:
     root = output_root or default_output_root()
     task_dir = find_task(root, task_id)
+    state = load_task(task_dir)
+    enforce_public_collection_policy(
+        state,
+        action=f"probe_browser_workflow:{scenario}",
+        json_output=json_output,
+    )
     try:
         result = probe_browser_workflow(
             task_dir,
@@ -1348,6 +1638,11 @@ def run_browser_workflow_command(
     root = output_root or default_output_root()
     task_dir = find_task(root, task_id)
     state = load_task(task_dir)
+    enforce_public_collection_policy(
+        state,
+        action=f"run_browser_workflow:{scenario}",
+        json_output=json_output,
+    )
     try:
         browser_kwargs = {
             "query": query,
@@ -1405,6 +1700,12 @@ def scout_browser_workflow_command(
 ) -> None:
     root = output_root or default_output_root()
     task_dir = find_task(root, task_id)
+    state = load_task(task_dir)
+    enforce_public_collection_policy(
+        state,
+        action=f"scout_browser_workflow:{scenario}",
+        json_output=json_output,
+    )
     try:
         scout_kwargs = {
             "query": query,

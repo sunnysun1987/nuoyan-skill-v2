@@ -190,11 +190,26 @@ def test_auto_translation_does_not_use_cloud_key_without_explicit_provider(monke
     assert explicit_engine.active_provider() == "openai"
 
 
-def test_setup_translation_engine_can_skip_model_download():
+def test_setup_translation_engine_can_skip_model_download_when_package_installed(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "ivd_research.translation.importlib.util.find_spec",
+        lambda _name: object(),
+    )
+    monkeypatch.setattr(TranslationEngine, "argos_installed", lambda _self: True)
+    monkeypatch.setattr(TranslationEngine, "argos_ready", lambda _self: False)
+
+    def forbid_subprocess(*_args, **_kwargs):
+        raise AssertionError("install_model=False must not start a model installer")
+
+    monkeypatch.setattr("ivd_research.translation.subprocess.run", forbid_subprocess)
+
     result = setup_translation_engine(provider="argos", install_model=False)
 
     assert result["provider"] == "argos"
-    assert result["status"] in {"ready", "package_installed_model_missing", "not_installed"}
+    assert result["status"] == "package_installed_model_missing"
+    assert result["commands"] == []
     assert "next_step_zh" in result
 
 

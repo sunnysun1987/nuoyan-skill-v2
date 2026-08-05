@@ -3,6 +3,8 @@
 本 skill 运行在 Codex 中，应该利用 Chrome 插件能力，但 Chrome 不是主采集引擎。
 当 HTTP/API adapter 不能覆盖真实网站流程时，使用 Playwright 持久化浏览器会话作为固定执行层。
 
+NMPA 是明确例外。标准 `nmpa_competitor` 场景采用“计划生成 -> 用户在自己的浏览器查询并保存证据 -> agent 专用导入”，不接管 Chrome，不启动 HTTP/Edge/Playwright collector。下文 NMPA 旧浏览器能力只允许用于适配器开发和失败诊断，不能关闭正式来源。
+
 ## 什么时候用 Chrome
 
 - HTTP/API adapter 失败，需要观察真实页面。
@@ -27,7 +29,7 @@ Playwright 会话状态保存在任务目录下的 `browser_state/<scenario_id>`
 - `nuoyan run-browser-workflow --task-id <task_id> --scenario <scenario_id> --query <query> [--methodology <method>] [--launch-mode playwright|edge-cdp] --json`
 
 `open-browser-session` 会打开可见浏览器。用户完成登录、Cloudflare 真人验证或机构认证后，登录态会保存在对应场景目录中。
-`probe-browser-workflow` 只做只读探测和状态分类。`scout-browser-workflow` 用于站点适配开发，保存 DOM 候选元素和 network response 候选；NMPA 这类 Playwright launch 不稳定的网站优先使用 `--launch-mode edge-cdp`。`run-browser-workflow` 是受控执行入口，返回标准状态：`needs_login`、`permission_required`、`search_results`、`completed` 或 `collection_failed`，并写入用户事件日志和开发调试日志。
+`probe-browser-workflow` 只做只读探测和状态分类。`scout-browser-workflow` 用于站点适配开发，保存 DOM 候选元素和 network response 候选；诊断旧 NMPA 适配器时可以显式使用 `--launch-mode edge-cdp`，但结果不能替代人工证据导入。`run-browser-workflow` 是已支持自动化场景的受控执行入口，返回标准状态：`needs_login`、`permission_required`、`search_results`、`completed` 或 `collection_failed`，并写入用户事件日志和开发调试日志。
 
 ## 什么时候不能用 Chrome
 
@@ -65,7 +67,7 @@ PatentHub 使用持久化 Playwright profile 复用登录态。首次运行先�
 
 采集器对页面执行两层校验：先排除“用户登录”“注册登录后可以查看更多专利信息”等登录页，再要求详情页同时包含有效公开号、非占位标题和至少一个真实专利字段。任一校验不通过时不生成 Material，并在 `collection_errors` 中记录 `needs_login` 或采集失败原因。
 
-默认采集应优先尝试无头浏览器，避免打扰研发人员当前桌面。只有在需要用户手动登录、Cloudflare/验证码、机构认证、下载授权确认，或开发排错时，才主动使用 `--headed`。NMPA 的 `edge-cdp` 路线会先尝试 Edge new headless；如果本机 Edge headless/CDP 无法保持可连接状态，则自动降级为最小化 headed Edge，并在结果和日志中记录 `actual_headless=false` 与降级原因。
+默认浏览器采集应优先尝试无头模式，避免打扰研发人员当前桌面。只有在需要用户手动登录、Cloudflare/验证码、机构认证、下载授权确认，或开发排错时，才主动使用 `--headed`。此规则不改变 NMPA 的人工辅助标准路径；NMPA 的 Edge/CDP 启动逻辑仅用于显式开发诊断。
 
 Chrome 观察结果不是最终材料。只有 CLI 生成的 `materials.jsonl`、`evidence_cards.jsonl`、HTML 报告和 Excel 复核表才是正式产物。
 Playwright 页面交互也不是自由点击。稳定路径必须沉淀为可重复 workflow 或 adapter，并把失败状态写入日志。

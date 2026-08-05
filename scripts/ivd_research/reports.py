@@ -24,6 +24,7 @@ from .quality import (
     fallback_materials_for_scenario,
 )
 from .source_quality import build_source_quality_audit
+from .research_integrity import build_research_integrity_audit
 from .status import now_iso
 from .translation import (
     extract_parameters,
@@ -88,7 +89,7 @@ def report_display_title(topic: str) -> str:
 
 
 def asset_root() -> Path:
-    return Path(__file__).resolve().parents[2] / "assets"
+    return Path(__file__).resolve().parent / "assets"
 
 
 def local_path(material: dict) -> str:
@@ -1327,6 +1328,127 @@ def attach_analysis_evidence_rows(
         )
         enriched.append(row)
     return enriched
+
+
+REPORT_SECTION_STRENGTH_LABELS = {
+    "strong": "强",
+    "moderate": "中等",
+    "weak": "弱",
+    "gap": "证据缺口",
+}
+
+
+def build_report_section_evidence_rows(
+    section: dict[str, Any],
+    *,
+    materials: list[dict],
+    screening_cards: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Render only the evidence explicitly cited by a validated report section."""
+    materials_by_id = {str(item.get("material_id") or ""): item for item in materials}
+    cards_by_id = {str(card.get("card_id") or ""): card for card in screening_cards}
+    rows: list[dict[str, Any]] = []
+    for order, ref in enumerate(section.get("supporting_evidence_refs") or []):
+        if not isinstance(ref, dict):
+            continue
+        material_id = str(ref.get("material_id") or "")
+        card_id = str(ref.get("evidence_card_id") or "")
+        material = materials_by_id.get(material_id)
+        card = cards_by_id.get(card_id)
+        if not material or not card:
+            continue
+        rows.append(
+            {
+                "score": 1000 - order,
+                "material_title": material_display_title(
+                    material,
+                    card.get("display_title") or card.get("title") or material_id,
+                ),
+                "material_href": material_href(material),
+                "excerpt": _short_text(ref.get("excerpt") or "", 260),
+                "evidence_card_id": card_id,
+                "evidence_card_title": (
+                    card.get("display_title") or card.get("title") or card_id
+                ),
+                "evidence_card_anchor": evidence_card_anchor(card_id),
+                "priority_label": card.get("priority_label", ""),
+            }
+        )
+    return rows
+
+
+def merge_validated_report_sections(
+    base_sections: list[dict[str, Any]],
+    report_sections: list[dict[str, Any]],
+    *,
+    materials: list[dict],
+    screening_cards: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Overlay validated project analysis onto the standard tabbed workbench.
+
+    The standard report remains the only user-facing entry. Rule-generated
+    sections are retained as a fallback when no validated section exists.
+    """
+    report_sections_by_title = {
+        str(section.get("section_title") or "").strip(): section
+        for section in report_sections
+        if str(section.get("section_title") or "").strip()
+    }
+    merged: list[dict[str, Any]] = []
+    for base in base_sections:
+        row = dict(base)
+        row.setdefault("facts", [])
+        row.setdefault("gaps", [row.get("gap", "")] if row.get("gap") else [])
+        row.setdefault("evidence_strength_label", "")
+        row.setdefault("confidence_level", "")
+        row.setdefault("review_status", "规则分析待复核")
+        row.setdefault("analysis_source", "rule_draft")
+        report_section = report_sections_by_title.get(str(row.get("title") or ""))
+        if report_section:
+            facts = [
+                clean_report_text(item)
+                for item in report_section.get("facts") or []
+                if clean_report_text(item)
+            ]
+            gaps = [
+                clean_report_text(item)
+                for item in report_section.get("evidence_gaps") or []
+                if clean_report_text(item)
+            ]
+            evidence_rows = build_report_section_evidence_rows(
+                report_section,
+                materials=materials,
+                screening_cards=screening_cards,
+            )
+            row.update(
+                {
+                    "analysis": clean_report_text(report_section.get("analysis", "")),
+                    "facts": facts,
+                    "gaps": gaps,
+                    "gap": "；".join(gaps),
+                    "evidence": (
+                        f"本章已绑定 {len(evidence_rows)} 条经过结构校验的直接支撑证据。"
+                        if evidence_rows
+                        else "本章当前没有可直接绑定的支撑证据，结论按证据缺口处理。"
+                    ),
+                    "evidence_rows": evidence_rows,
+                    "evidence_strength_label": REPORT_SECTION_STRENGTH_LABELS.get(
+                        str(report_section.get("evidence_strength_summary") or ""),
+                        str(report_section.get("evidence_strength_summary") or ""),
+                    ),
+                    "confidence_level": str(
+                        report_section.get("confidence_level") or ""
+                    ),
+                    "review_status": (
+                        "待人工复核"
+                        if report_section.get("needs_human_review", True)
+                        else "已标记完成复核"
+                    ),
+                    "analysis_source": "validated_report_section",
+                }
+            )
+        merged.append(row)
+    return merged
 
 
 def build_expert_decision(
@@ -3198,6 +3320,9 @@ def build_standard_report(task_dir: Path, output: Path | None = None) -> dict:
     evidence_cards = normalize_evidence_cards(
         reviewed_cards or list(read_jsonl(task_dir / "data" / "evidence_cards.jsonl"))
     )
+    report_sections = normalize_report_sections(
+        list(read_jsonl(task_dir / "data" / "report_sections.jsonl"))
+    )
     materials = normalize_materials(
         list(read_jsonl(task_dir / "data" / "materials.jsonl")),
         evidence_cards,
@@ -3244,6 +3369,7 @@ def build_standard_report(task_dir: Path, output: Path | None = None) -> dict:
         scenario_statuses=scenario_statuses,
         required_scenario_ids=required_scenarios,
     )
+    research_integrity = build_research_integrity_audit(task_dir, task=task)
     analysis = build_feasibility_analysis(
         analysis_materials,
         analysis_evidence_cards,
@@ -3518,6 +3644,12 @@ def build_standard_report(task_dir: Path, output: Path | None = None) -> dict:
         materials=analysis_materials,
         screening_cards=analysis_screening_cards,
     )
+    project_analysis_sections = merge_validated_report_sections(
+        project_analysis_sections,
+        report_sections,
+        materials=analysis_materials,
+        screening_cards=analysis_screening_cards,
+    )
     metric_fact_rows = build_metric_fact_rows(
         metric_facts,
         materials_by_id=materials_by_id,
@@ -3561,6 +3693,7 @@ def build_standard_report(task_dir: Path, output: Path | None = None) -> dict:
         collection_gap_rows=collection_gap_rows,
         collection_gap_summary=collection_gap_summary,
         source_quality=source_quality,
+        research_integrity=research_integrity,
         analysis=analysis,
         business_decision=business_decision,
         evidence_map=evidence_map,

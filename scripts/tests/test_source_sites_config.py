@@ -32,3 +32,9 @@ def test_v21_source_sites_include_standard_literature_and_plugin_sources():
     assert site_map["life_science_research"].access_mode == "plugin"
     assert site_map["pubmed_literature"].access_mode == "api"
 
+
+def test_nmpa_standard_source_is_manual_assisted():
+    site_map = source_site_map()
+
+    assert site_map["nmpa_competitor"].access_mode == "manual_assisted"
+    assert "截图" in site_map["nmpa_competitor"].restriction_notes
