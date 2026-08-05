@@ -55,6 +55,53 @@ def test_delivery_pipeline_defaults_to_headless():
     assert option.default is True
 
 
+def test_full_pipeline_persists_each_scenario_before_later_interruption(
+    monkeypatch, tmp_path: Path
+):
+    state = init_task("beta-hCG 场景状态持久化测试", tmp_path)
+    task_dir = Path(state.task_dir)
+    update_confirmations(task_dir, _hcg_confirmations())
+    _import_minimum_life_science(state.task_id, task_dir)
+
+    def blocked_cmde(task_id, task_dir, params):
+        return ScenarioResult(
+            status=FailureType.PERMISSION_REQUIRED.value,
+            failure_type=FailureType.PERMISSION_REQUIRED,
+            message_zh="CMDE 返回安全脚本，请改用浏览器补证。",
+        )
+
+    def interrupted_standard(task_id, task_dir, params):
+        raise KeyboardInterrupt("simulate later pipeline interruption")
+
+    monkeypatch.setattr(
+        "ivd_research.cli.SCENARIO_COLLECTORS",
+        {
+            "cmde_regulatory": blocked_cmde,
+            "standards_current": interrupted_standard,
+        },
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "run-full-pipeline",
+            "--task-id",
+            state.task_id,
+            "--output-root",
+            str(tmp_path),
+            "--skip-network-preflight",
+            "--json",
+        ],
+    )
+
+    task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+    cmde = task["scenario_statuses"]["cmde_regulatory"]
+
+    assert result.exit_code != 0
+    assert cmde["status"] == FailureType.PERMISSION_REQUIRED.value
+    assert "浏览器补证" in cmde["last_message"]
+
+
 def test_merge_plan_results_preserves_partial_failure_status():
     material = Material(
         material_id="MAT-000001",

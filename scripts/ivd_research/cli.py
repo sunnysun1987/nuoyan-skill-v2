@@ -1287,6 +1287,7 @@ def run_full_pipeline_command(
             if result is None:
                 continue
             _record_scenario_result(task_dir, state, scenario, result)
+            save_task(state)
         save_task(state)
     else:
         save_task(state)
