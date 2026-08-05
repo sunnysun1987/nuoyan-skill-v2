@@ -108,7 +108,7 @@ V2.1 adds a standard source-site baseline and lightweight local knowledge assets
 - `nuoyan build-knowledge --task-id <task_id> --json` generates metric facts, topic index, dedup index and a literature graph.
 - `nuoyan source-quality --task-id <task_id> --json` audits no-result sources for possible false negatives, including single-query no-results, missing core-query attempts, overconstrained long queries and cross-source contradictions such as OpenAlex no-results while PubMed/PMC/LSR already has related literature.
 
-V2.2.1 keeps validated 17-section project analysis inside the standard six-tab delivery report. It also makes release CI run on version tags, requires strict doctor health, compiles Python sources and rejects malformed patches before a version is distributed.
+V2.2.1 keeps validated 17-section project analysis inside the standard six-tab delivery report. It also packages report templates and styles into the Python wheel, makes release CI run on version tags, requires strict doctor health, compiles Python sources and rejects malformed patches before a version is distributed.
 
 V2.2.0 adds a claim-level research integrity layer on top of materials, evidence cards and metric facts:
 
@@ -179,6 +179,8 @@ V2.1.12 adds a Windows standard-environment installer and a strict `doctor --pro
 V2.1.11 adds an opt-in real-network acceptance test for OpenAlex and PubMed, allows reviewed staged evidence cards to replace automatic drafts with the same ID, honors explicitly small `quick_scan` retrieval limits, and tightens metric extraction so engineering sensitivity, citation numbers and lowercase conjunctions are not presented as diagnostic facts. LoD and complete cutoff ranges are now captured as structured metric facts.
 
 The GitHub audit candidate's reproducible execution scope and known business-readiness limits are recorded in [the V2.1.11 live validation summary](audit/v2.1.11-live-validation.md). The summary intentionally does not claim that restricted regulatory, patent or Chinese-journal scenarios are business-ready.
+
+The V2.2.1 regression, wheel, clean-install, CLI and live-public-source checks are recorded in [the V2.2.1 release validation](audit/v2.2.1-release-validation.md). It does not replace project-specific business readiness or Windows workstation acceptance.
 
 V2.1.10 aligns the skill instructions with the registered `nuoyan` CLI, makes report and delivery rendering translation-cache-only, fails closed when optional function signatures cannot be inspected, preserves partial query failures as `completed_with_warnings`, and makes delivery artifacts plus V2.1 knowledge assets explicit `business_ready` gates. CLI references, scenario documentation, report rules and the nine verification fields now share one contract.
 
