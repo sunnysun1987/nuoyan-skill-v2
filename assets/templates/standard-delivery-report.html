@@ -8,6 +8,7 @@
 </head>
 {% macro render_screening_card(card, anchor_prefix="") -%}
 <article id="{{ anchor_prefix }}{{ card.evidence_anchor }}" class="card filter-card"
+  data-relevance="{{ card.data_relevance }}"
   data-priority="{{ card.data_priority }}"
   data-stage="{{ card.data_stage }}"
   data-sample="{{ card.data_sample }}"
@@ -36,6 +37,7 @@
       <p class="card-source">{{ card.journal }}{% if card.authors %} · {{ card.authors }}{% endif %}</p>
     </div>
     <div class="card-meta">
+      <span class="status-pill {{ 'info' if card.project_relevant else 'warn' }}">{{ card.relevance_label }}</span>
       <span class="priority {{ card.priority_class }}">{{ card.priority_label }}</span>
       <span class="year">{{ card.year }}</span>
     </div>

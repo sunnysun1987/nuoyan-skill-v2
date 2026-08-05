@@ -108,7 +108,7 @@ V2.1 adds a standard source-site baseline and lightweight local knowledge assets
 - `nuoyan build-knowledge --task-id <task_id> --json` generates metric facts, topic index, dedup index and a literature graph.
 - `nuoyan source-quality --task-id <task_id> --json` audits no-result sources for possible false negatives, including single-query no-results, missing core-query attempts, overconstrained long queries and cross-source contradictions such as OpenAlex no-results while PubMed/PMC/LSR already has related literature.
 
-V2.2.1 keeps validated 17-section project analysis inside the standard six-tab delivery report. It also packages report templates and styles into the Python wheel, makes release CI run on version tags, requires strict doctor health, compiles Python sources and rejects malformed patches before a version is distributed.
+V2.2.2 keeps validated 17-section project analysis inside the standard six-tab delivery report. It adds bad-case regression coverage for resumable scenario state, keeps all evidence cards auditable with relevance labels, separates artifact delivery from business readiness, and records executable fallback actions for restricted sources. Release CI, strict doctor health, source compilation and patch checks remain mandatory.
 
 V2.2.0 adds a claim-level research integrity layer on top of materials, evidence cards and metric facts:
 
@@ -170,7 +170,7 @@ Core fields are `delivery_artifacts_ready`, `v21_assets_ready`, `final_review_re
 
 `business_ready=true` requires more than generated files. The package must have confirmed search scope, complete source coverage or documented fallback, source-site and knowledge assets, reviewed evidence cards, reviewed claim-level evidence links, resolved conflicts, two distinct saturation audits, and a valid standard delivery folder.
 
-V2.2.1 fixes standard-report integration so validated `report_sections.jsonl` content replaces only the matching project-analysis chapters while preserving the R&D reading, metric facts, core literature, all evidence cards and evidence-gap tabs. The release CI now runs for `v*` tags and uses `doctor --strict` so an unhealthy runtime cannot pass on command availability alone.
+V2.2.2 fixes four release regressions found in real project replay: interrupted long pipelines now persist each completed scenario, the “全部证据卡” workbench includes relevance-excluded cards for audit, `delivery_artifacts_ready` no longer conflates missing evidence with missing files, and PatentHub login restrictions carry an executable browser补证 action. V2.2.1 fixes standard-report integration so validated `report_sections.jsonl` content replaces only the matching project-analysis chapters while preserving the R&D reading, metric facts, core literature, all evidence cards and evidence-gap tabs.
 
 V2.2.0 adds claim-level traceability, contradiction preservation, source independence checks, research saturation state, data-boundary routing and search-result evidence downgrading. The HTML gap tab, Excel review workbook and trace package expose the same research-integrity audit used by `verify-package`.
 
@@ -180,7 +180,7 @@ V2.1.11 adds an opt-in real-network acceptance test for OpenAlex and PubMed, all
 
 The GitHub audit candidate's reproducible execution scope and known business-readiness limits are recorded in [the V2.1.11 live validation summary](audit/v2.1.11-live-validation.md). The summary intentionally does not claim that restricted regulatory, patent or Chinese-journal scenarios are business-ready.
 
-The V2.2.1 regression, wheel, clean-install, CLI and live-public-source checks are recorded in [the V2.2.1 release validation](audit/v2.2.1-release-validation.md). It does not replace project-specific business readiness or Windows workstation acceptance.
+The V2.2.2 regression, clean-install, CLI, installed-skill and live-public-source checks are recorded in [the V2.2.2 release validation](audit/v2.2.2-release-validation.md). It does not replace project-specific business readiness or Windows workstation acceptance.
 
 V2.1.10 aligns the skill instructions with the registered `nuoyan` CLI, makes report and delivery rendering translation-cache-only, fails closed when optional function signatures cannot be inspected, preserves partial query failures as `completed_with_warnings`, and makes delivery artifacts plus V2.1 knowledge assets explicit `business_ready` gates. CLI references, scenario documentation, report rules and the nine verification fields now share one contract.
 
