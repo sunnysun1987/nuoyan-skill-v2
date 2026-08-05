@@ -629,6 +629,51 @@ def test_standard_delivery_merges_validated_report_sections_without_losing_workb
         assert soup.select_one(f"#{panel_id}") is not None
 
 
+def test_all_evidence_tab_keeps_relevance_exclusions_visible_for_audit(
+    tmp_path: Path,
+):
+    task_dir = _task_dir(tmp_path)
+    update_confirmations(task_dir, FULL_CONFIRMATIONS)
+    _write_single_material_and_card(task_dir)
+    excluded = Material(
+        material_id="MAT-000002",
+        task_id="TEST",
+        source_scenario="standards_current",
+        material_type="standard",
+        title="禽腺病毒4型荧光定量PCR检测方法",
+        source_url="https://example.org/animal-standard",
+        collection_time="2026-08-05T00:00:00+08:00",
+        raw_fields={"standard_name": "禽腺病毒4型荧光定量PCR检测方法", "trade": "畜牧业"},
+    )
+    append_jsonl(
+        task_dir / "data" / "materials.jsonl",
+        excluded.model_dump(mode="json"),
+    )
+    excluded_card = build_draft_evidence_card(
+        task_dir,
+        excluded.model_dump(mode="json"),
+        "EC-000002",
+    )
+    append_jsonl(
+        task_dir / "data" / "evidence_cards.jsonl",
+        excluded_card.model_dump(mode="json"),
+    )
+
+    build_standard_delivery(task_dir)
+
+    html = (task_dir / "交付目录" / "00_立项调研综合报告.html").read_text(
+        encoding="utf-8"
+    )
+    soup = BeautifulSoup(html, "html.parser")
+    panel = soup.select_one("#tab-screening")
+
+    assert panel is not None
+    assert len(panel.select(".filter-card")) == 2
+    assert panel.select_one('[data-relevance="相关性排除"]') is not None
+    assert "相关性排除" in panel.get_text(" ", strip=True)
+    assert "2 / 2" in panel.get_text(" ", strip=True)
+
+
 def test_verify_package_requires_fallback_for_failed_formal_scenarios(tmp_path: Path):
     task_dir = _task_dir(tmp_path)
     update_confirmations(task_dir, FULL_CONFIRMATIONS)

@@ -3062,6 +3062,9 @@ def build_screening_cards(
         row["priority_label"] = priority_label
         row["project_relevant"] = material.get("project_relevant", True)
         row["project_relevance_reason"] = material.get("project_relevance_reason", "")
+        row["relevance_label"] = (
+            "纳入分析" if row["project_relevant"] else "相关性排除"
+        )
         row["stage"] = _screening_stage(material, row)
         row["sample"] = _pick_screening_terms(text, SCREENING_SAMPLE_TERMS, fallback="样本待复核")
         row["platform"] = _pick_screening_terms(text, SCREENING_PLATFORM_TERMS, fallback="平台待复核")
@@ -3123,6 +3126,7 @@ def build_screening_cards(
         ]:
             row[f"data_{key}"] = ";".join(row[key])
         row["data_priority"] = row["priority_label"]
+        row["data_relevance"] = row["relevance_label"]
         screening_cards.append(row)
 
     priority_order = {"A": 0, "B": 1, "C": 2}
@@ -3143,6 +3147,7 @@ def build_filter_groups(
     include_priority: bool = True,
 ) -> list[dict[str, Any]]:
     definitions = [
+        ("relevance", "分析状态", "relevance_label"),
         ("priority", "证据优先级", "priority_label"),
         ("stage", "研发阶段", "stage"),
         ("sample", "样本类型", "sample"),
@@ -3628,9 +3633,10 @@ def build_standard_report(task_dir: Path, output: Path | None = None) -> dict:
     ][:60]
     if not core_cards:
         core_cards = analysis_screening_cards[:30]
-    filter_groups = build_filter_groups(analysis_screening_cards)
+    filter_groups = build_filter_groups(screening_cards)
     core_filter_groups = build_filter_groups(core_cards, include_priority=False)
-    screening_summary = build_screening_summary(analysis_screening_cards)
+    screening_summary = build_screening_summary(screening_cards)
+    analysis_screening_summary = build_screening_summary(analysis_screening_cards)
     project_analysis_sections = build_project_analysis_sections(
         literature_materials=literature_materials,
         regulatory_materials=regulatory_materials,
@@ -3659,7 +3665,7 @@ def build_standard_report(task_dir: Path, output: Path | None = None) -> dict:
     expert_decision = build_expert_decision(
         business_decision,
         materials=analysis_materials,
-        screening_summary=screening_summary,
+        screening_summary=analysis_screening_summary,
         knowledge_status=knowledge_status,
         failed_scenarios=failed_scenarios,
         collection_gap_summary=collection_gap_summary,
@@ -3681,7 +3687,7 @@ def build_standard_report(task_dir: Path, output: Path | None = None) -> dict:
             item.get("material_id"): item for item in analysis_materials
         },
         evidence_cards=analysis_evidence_cards,
-        screening_cards=analysis_screening_cards,
+        screening_cards=screening_cards,
         core_cards=core_cards,
         filter_groups=filter_groups,
         core_filter_groups=core_filter_groups,
