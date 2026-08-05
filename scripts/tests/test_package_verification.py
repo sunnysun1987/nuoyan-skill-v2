@@ -688,6 +688,7 @@ def test_verify_package_requires_fallback_for_failed_formal_scenarios(tmp_path: 
 
     result = verify_package(task_dir)
 
+    assert result["delivery_artifacts_ready"] is True
     assert result["fallback_ready"] is False
     assert result["scenario_coverage_ready"] is False
     assert result["business_ready"] is False

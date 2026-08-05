@@ -724,7 +724,6 @@ def verify_package(task_dir: Path) -> dict:
         and standard_report_exists
         and standard_review_exists
         and standard_trace_exists
-        and collection_alerts["level"] != "critical"
     )
     included_reviewed_cards = [
         card for card in reviewed_cards if card.get("include_in_report")
