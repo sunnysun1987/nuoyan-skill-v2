@@ -108,6 +108,8 @@ V2.1 adds a standard source-site baseline and lightweight local knowledge assets
 - `nuoyan build-knowledge --task-id <task_id> --json` generates metric facts, topic index, dedup index and a literature graph.
 - `nuoyan source-quality --task-id <task_id> --json` audits no-result sources for possible false negatives, including single-query no-results, missing core-query attempts, overconstrained long queries and cross-source contradictions such as OpenAlex no-results while PubMed/PMC/LSR already has related literature.
 
+V2.2.1 keeps validated 17-section project analysis inside the standard six-tab delivery report. It also makes release CI run on version tags, requires strict doctor health, compiles Python sources and rejects malformed patches before a version is distributed.
+
 V2.2.0 adds a claim-level research integrity layer on top of materials, evidence cards and metric facts:
 
 - Search results and snippets are discovery leads. `import-finding --source web_search` records them as `retrieval_kind=search_result` and `content_verified=false` by default; they cannot support a research claim until the underlying page or document has been fetched and inspected.
@@ -168,7 +170,9 @@ Core fields are `delivery_artifacts_ready`, `v21_assets_ready`, `final_review_re
 
 `business_ready=true` requires more than generated files. The package must have confirmed search scope, complete source coverage or documented fallback, source-site and knowledge assets, reviewed evidence cards, reviewed claim-level evidence links, resolved conflicts, two distinct saturation audits, and a valid standard delivery folder.
 
-V2.2.0 adds claim-level traceability, contradiction preservation, source independence checks, research saturation state, data-boundary routing and search-result evidence downgrading. The HTML gap tab, Excel review workbook and trace package now expose the same research-integrity audit used by `verify-package`.
+V2.2.1 fixes standard-report integration so validated `report_sections.jsonl` content replaces only the matching project-analysis chapters while preserving the R&D reading, metric facts, core literature, all evidence cards and evidence-gap tabs. The release CI now runs for `v*` tags and uses `doctor --strict` so an unhealthy runtime cannot pass on command availability alone.
+
+V2.2.0 adds claim-level traceability, contradiction preservation, source independence checks, research saturation state, data-boundary routing and search-result evidence downgrading. The HTML gap tab, Excel review workbook and trace package expose the same research-integrity audit used by `verify-package`.
 
 V2.1.12 adds a Windows standard-environment installer and a strict `doctor --profile standard` gate. The gate checks the actual runtime path and version, conflicting legacy distributions, a launchable Playwright Chromium, the PDF toolchain, the Argos English-to-Chinese model, enabled Codex Life Science Research/Browser/Chrome plugins, and live public-source connectivity. Plugin cache presence alone no longer counts as an enabled capability.
 
