@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>{{ topic }} - 材料清单</title>
+  <style>{{ css }}</style>
+</head>
+<body>
+<main>
+  <header class="page-header">
+    <h1>{{ topic }} — 材料清单</h1>
+    <p class="meta"><span>任务ID：{{ task_id }}</span><span>生成时间：{{ generated_at }}</span></p>
+  </header>
+
+  <section class="metric-grid">
+    <div class="metric-card"><div class="value">{{ materials|length }}</div><div class="label">材料总数</div></div>
+    <div class="metric-card"><div class="value">{{ evidence_cards|length }}</div><div class="label">证据卡总数</div></div>
+    <div class="metric-card"><div class="value danger">{{ failed_count }}</div><div class="label">需处理材料</div></div>
+  </section>
+
+  {% if collection_alerts.level != "ok" %}
+  <section class="alert-panel {{ collection_alerts.level }}">
+    <h2>{{ collection_alerts.headline }}</h2>
+    <p>材料数：{{ collection_alerts.material_count }}；证据卡数：{{ collection_alerts.evidence_card_count }}；失败场景：{{ collection_alerts.failed_count }}；未启动场景：{{ collection_alerts.not_started_count }}。</p>
+    {% if collection_alerts.critical_messages %}
+    <h3>必须先处理的问题</h3>
+    <ul>
+      {% for message in collection_alerts.critical_messages %}
+      <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if collection_alerts.warning_messages %}
+    <h3>待补证或待确认事项</h3>
+    <ul>
+      {% for message in collection_alerts.warning_messages %}
+      <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <section class="section-card">
+    <h2>审核来源</h2>
+    <p><span class="tag">{% if review_source == 'reviewed' %}已审核{% elif review_source == 'draft' %}草稿{% else %}{{ review_source }}{% endif %}</span></p>
+    <h2>场景采集覆盖</h2>
+    <table>
+      <thead>
+        <tr><th>场景</th><th>状态</th><th>材料数</th><th>失败数</th><th>消息</th><th>下一步</th></tr>
+      </thead>
+      <tbody>
+      {% for scenario in scenario_statuses %}
+        <tr>
+          <td>{{ scenario.label_zh or scenario.scenario_id }}</td>
+          <td><span class="{% if scenario.status == 'completed' %}status-completed{% elif scenario.status in ('collection_failed','no_results','needs_login','permission_required') %}status-failed{% elif scenario.status == 'deferred' %}status-deferred{% else %}status-pending{% endif %}">{{ scenario.status }}</span></td>
+          <td>{{ scenario.material_count }}</td>
+          <td>{{ scenario.failure_count }}</td>
+          <td>{{ scenario.last_message }}</td>
+          <td>{{ scenario.next_action }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="filter-panel" aria-label="本地筛选">
+    <h2>本地筛选</h2>
+    <p class="notice">输入条件后会在本页即时筛选材料台账和材料详情。</p>
+    <div class="filter-grid">
+      <label>来源场景<input type="search" data-filter-field="scenario" placeholder="场景(source_scenario)"></label>
+      <label>材料类型<input type="search" data-filter-field="material_type" placeholder="类型(material_type)"></label>
+      <label>证据强度<input type="search" data-filter-field="evidence_strength" placeholder="强度(evidence_strength)"></label>
+      <label>纳入报告<input type="search" data-filter-field="include_in_report" placeholder="true / false"></label>
+      <label>标签<input type="search" data-filter-field="tags" placeholder="taxonomy tag"></label>
+      <label>状态<input type="search" data-filter-field="status" placeholder="download / parse / failure"></label>
+    </div>
+  </section>
+
+  <h2>材料台账</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>材料ID</th><th>类型</th><th>标题</th><th>来源场景</th><th>证据强度</th><th>纳入报告</th><th>下载/导入</th><th>全文解析</th><th>本地路径</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for material in materials %}
+      <tr data-filter-record data-scenario="{{ material.source_scenario }}" data-material-type="{{ material.material_type }}" data-evidence-strength="{{ material.evidence_strengths|join(',') }}" data-include-in-report="{{ material.include_in_report|lower }}" data-tags="{{ material.taxonomy_tags|join(',') }}" data-status="{{ material.status_text }}">
+        <td><span class="tag mono">{{ material.material_id }}</span></td>
+        <td>{{ material.material_type_zh or material.material_type }}</td>
+        <td>{{ material.title }}</td>
+        <td>{{ material.source_scenario_zh or material.source_scenario }}</td>
+        <td>{{ material.evidence_strengths|join('；') if material.evidence_strengths else '待补证据' }}</td>
+        <td>{{ '是' if material.include_in_report else '否' }}</td>
+        <td>{{ material.download_status }}</td>
+        <td>{{ material.extracted_text_status }}</td>
+        <td>
+          {% if material.local_path %}<a href="../{{ material.local_path }}">{{ material.local_path }}</a>{% endif %}
+          {% if material.extracted_text_path %}<br><a href="../{{ material.extracted_text_path }}">{{ material.extracted_text_path }}</a>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>材料详情</h2>
+  {% if not materials %}
+  <p class="notice">暂无材料事件；请先完成材料采集或导入。</p>
+  {% endif %}
+  {% for material in materials %}
+  <article class="record" data-filter-record data-scenario="{{ material.source_scenario }}" data-material-type="{{ material.material_type }}" data-evidence-strength="{{ material.evidence_strengths|join(',') }}" data-include-in-report="{{ material.include_in_report|lower }}" data-tags="{{ material.taxonomy_tags|join(',') }}" data-status="{{ material.status_text }}">
+    <div class="card-header"><h3>{{ material.title }}</h3></div>
+    <p><span class="tag">{{ material.material_type_zh or material.material_type }}</span><span class="tag">{{ material.source_scenario_zh or material.source_scenario }}</span><span class="tag mono">{{ material.material_id }}</span></p>
+    <h4>事件摘要</h4>
+    {% if material.evidence_summaries %}
+    <ul>
+      {% for summary in material.evidence_summaries %}
+      <li>{{ summary }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="notice">暂无证据卡摘要；请在证据复核后补充。</p>
+    {% endif %}
+    {% if material.source_url %}<p>来源链接：<a href="{{ material.source_url }}">{{ material.source_url }}</a></p>{% endif %}
+    {% if material.failure_reason %}<p><span class="tag danger">需处理：{{ material.failure_reason }}</span></p>{% endif %}
+  </article>
+  {% endfor %}
+</main>
+<script>
+function applyMaterialFilters() {
+  const filters = {};
+  document.querySelectorAll("[data-filter-field]").forEach((input) => {
+    filters[input.dataset.filterField] = input.value.trim().toLowerCase();
+  });
+  document.querySelectorAll("[data-filter-record]").forEach((record) => {
+    const visible = Object.entries(filters).every(([field, value]) => {
+      if (!value) return true;
+      return String(record.dataset[field] || "").toLowerCase().includes(value);
+    });
+    record.hidden = !visible;
+  });
+}
+document.querySelectorAll("[data-filter-field]").forEach((input) => {
+  input.addEventListener("input", applyMaterialFilters);
+});
+</script>
+</body>
+</html>

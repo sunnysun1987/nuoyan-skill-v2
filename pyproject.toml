@@ -49,6 +49,12 @@ package-dir = {"" = "scripts"}
 [tool.setuptools.packages.find]
 where = ["scripts"]
 
+[tool.setuptools.package-data]
+ivd_research = [
+    "assets/styles/*.css",
+    "assets/templates/*",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["scripts/tests"]
 pythonpath = ["scripts"]

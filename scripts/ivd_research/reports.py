@@ -89,7 +89,7 @@ def report_display_title(topic: str) -> str:
 
 
 def asset_root() -> Path:
-    return Path(__file__).resolve().parents[2] / "assets"
+    return Path(__file__).resolve().parent / "assets"
 
 
 def local_path(material: dict) -> str:

@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>{{ topic }} - 项目可行性报告初稿</title>
+  <style>{{ css }}</style>
+</head>
+<body>
+<main>
+  <header class="page-header">
+    <h1>{{ topic }} — 项目可行性报告初稿</h1>
+    <p class="meta"><span>任务ID：{{ task_id }}</span><span>生成时间：{{ generated_at }}</span></p>
+  </header>
+
+  <div class="notice{% if analysis_source != 'ai_report_sections' %} warn{% endif %}">
+    {% if analysis_source == "ai_report_sections" %}
+    <span class="tag">AI 分析已接入</span> 本报告已读取 {{ report_sections_count }} 个经校验的 AI 分析章节；章节中的结论必须能追溯到材料或证据卡引用。
+    {% else %}
+    <span class="tag warn">规则草稿</span> 当前没有已提交的 AI 分析章节，报告只展示材料统计、证据卡摘要和规则生成的初步线索，不能作为 AI 分析结论展示。
+    {% endif %}
+  </div>
+
+  <div class="notice">本报告基于已采集材料、可解析全文和证据卡自动生成。所有初步判断均应由研发人员复核后再进入正式立项材料。</div>
+
+  {% if collection_alerts.level != "ok" %}
+  <section class="alert-panel {{ collection_alerts.level }}">
+    <h2>{{ collection_alerts.headline }}</h2>
+    <p>材料数：{{ collection_alerts.material_count }}；证据卡数：{{ collection_alerts.evidence_card_count }}；失败场景：{{ collection_alerts.failed_count }}；未启动场景：{{ collection_alerts.not_started_count }}。</p>
+    {% if collection_alerts.critical_messages %}
+    <h3>必须先处理的问题</h3>
+    <ul>
+      {% for message in collection_alerts.critical_messages %}
+      <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if collection_alerts.warning_messages %}
+    <h3>待补证或待确认事项</h3>
+    <ul>
+      {% for message in collection_alerts.warning_messages %}
+      <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    <div class="insight danger">当前状态下不得把报告解释为“未发现证据”或“课题缺乏文献支持”；只能解释为采集未完成或采集失败。</div>
+  </section>
+  {% endif %}
+
+  <section class="metric-grid">
+    <div class="metric-card"><div class="value">{{ materials|length }}</div><div class="label">材料总数</div></div>
+    <div class="metric-card"><div class="value">{{ evidence_cards|length }}</div><div class="label">证据卡数</div></div>
+    <div class="metric-card"><div class="value info">{{ included_count }}</div><div class="label">纳入报告证据</div></div>
+    <div class="metric-card"><div class="value">{{ analysis.source_basis.extracted_text }}</div><div class="label">已解析文本</div></div>
+    <div class="metric-card"><div class="value">{{ analysis.source_basis.downloaded_originals }}</div><div class="label">已下载原文</div></div>
+  </section>
+
+  <section class="section-card">
+    <h2>初步结论</h2>
+    <p>{{ analysis.overall_judgement }}</p>
+    <p class="insight">证据基础：材料 {{ analysis.source_basis.materials }} 条，证据卡 {{ analysis.source_basis.evidence_cards }} 张，已解析文本 {{ analysis.source_basis.extracted_text }} 份，已下载原文 {{ analysis.source_basis.downloaded_originals }} 份。</p>
+  </section>
+
+  <section class="section-card">
+    <h2>核心证据分析</h2>
+
+    <h3>竞品注册与注册参照</h3>
+    {% if analysis.competitor_lines %}
+      <ul>
+      {% for line in analysis.competitor_lines %}
+        <li>{{ line }}</li>
+      {% endfor %}
+      </ul>
+    {% else %}
+      <p><span class="tag warn">证据缺口</span>当前没有可用于注册参照和竞争格局判断的 NMPA 竞品材料。</p>
+    {% endif %}
+
+    <h3>临床价值与应用定位</h3>
+    {% if analysis.clinical_points %}
+      {% for item in analysis.clinical_points %}
+      <article class="record">
+        <div class="card-header"><h4>{{ item.title }}</h4></div>
+        <p>{{ item.point }}</p>
+      </article>
+      {% endfor %}
+    {% else %}
+      <p><span class="tag warn">证据缺口</span>当前缺少可支撑临床意义、目标人群和诊疗路径的文献证据。</p>
+    {% endif %}
+
+    <h3>技术可行性</h3>
+    {% if analysis.technology_points %}
+      {% for item in analysis.technology_points %}
+      <article class="record">
+        <div class="card-header"><h4>{{ item.title }}</h4></div>
+        <p>{{ item.point }}</p>
+      </article>
+      {% endfor %}
+    {% else %}
+      <p><span class="tag warn">证据缺口</span>当前缺少可用于判断方法学、样本类型和预期用途的结构化材料。</p>
+    {% endif %}
+
+    <h3>标准与监管路径</h3>
+    {% if analysis.standard_titles or analysis.regulatory_titles %}
+      <ul>
+      {% for title in analysis.standard_titles %}
+        <li>现行标准：{{ title }}</li>
+      {% endfor %}
+      {% for title in analysis.regulatory_titles %}
+        <li>监管资料：{{ title }}</li>
+      {% endfor %}
+      </ul>
+    {% else %}
+      <p><span class="tag warn">证据缺口</span>当前缺少现行标准或监管指导原则材料。</p>
+    {% endif %}
+
+    <h3>专利与知识产权线索</h3>
+    {% if analysis.ip_points %}
+      {% for item in analysis.ip_points %}
+      <article class="record">
+        <div class="card-header"><h4>{{ item.title }}</h4></div>
+        <p><span class="tag">{{ item.identifier }}</span><span class="tag warn">{{ item.relevance }}</span></p>
+        <p>{{ item.point }}</p>
+      </article>
+      {% endfor %}
+    {% else %}
+      <p><span class="tag warn">证据缺口</span>当前没有 PatentHub 专利材料，无法判断知识产权风险。</p>
+    {% endif %}
+  </section>
+
+  <section class="section-card">
+    <h2>证据缺口与下一步</h2>
+    <ul>
+    {% for gap in analysis.evidence_gaps %}
+      <li>{{ gap }}</li>
+    {% endfor %}
+    </ul>
+    <h3>建议动作</h3>
+    <ul>
+    {% for action in analysis.next_actions %}
+      <li>{{ action }}</li>
+    {% endfor %}
+    </ul>
+  </section>
+
+  <section class="section-card">
+    <h2>审核来源</h2>
+    <p><span class="tag">{% if review_source == 'reviewed' %}已审核{% elif review_source == 'draft' %}草稿{% else %}{{ review_source }}{% endif %}</span></p>
+    <h2>场景采集覆盖</h2>
+    <table>
+      <thead>
+        <tr><th>场景</th><th>状态</th><th>材料数</th><th>失败数</th><th>消息</th><th>下一步</th></tr>
+      </thead>
+      <tbody>
+      {% for scenario in scenario_statuses %}
+        <tr>
+          <td>{{ scenario.label_zh or scenario.scenario_id }}</td>
+          <td><span class="{% if scenario.status == 'completed' %}status-completed{% elif scenario.status in ('collection_failed','no_results','needs_login','permission_required') %}status-failed{% elif scenario.status == 'deferred' %}status-deferred{% else %}status-pending{% endif %}">{{ scenario.status }}</span></td>
+          <td>{{ scenario.material_count }}</td>
+          <td>{{ scenario.failure_count }}</td>
+          <td>{{ scenario.last_message }}</td>
+          <td>{{ scenario.next_action }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <nav class="toc" aria-label="目录">
+    <h2>目录</h2>
+    <ol>
+      {% for section in sections %}
+      <li><a href="#section-{{ loop.index }}">{{ section }}</a></li>
+      {% endfor %}
+    </ol>
+  </nav>
+
+  {% for section in sections %}
+  <section id="section-{{ loop.index }}" class="section-card">
+    <h2>{{ section }}</h2>
+    {% set ai_section = report_sections_by_title.get(section) %}
+    {% if ai_section %}
+      <p><span class="tag">AI 分析章节</span><span class="tag">{{ ai_section.confidence_level }}</span>{% if ai_section.needs_human_review %}<span class="tag warn">需人工复核</span>{% endif %}</p>
+      <h3>事实</h3>
+      {% if ai_section.facts %}
+      <ul>
+      {% for fact in ai_section.facts %}
+        <li>{{ fact }}</li>
+      {% endfor %}
+      </ul>
+      {% else %}
+      <p><span class="tag warn">证据缺口</span>AI 未能从材料中提取可引用事实。</p>
+      {% endif %}
+      <h3>分析</h3>
+      <div class="insight">{{ ai_section.analysis }}</div>
+      <h3>证据缺口</h3>
+      {% if ai_section.evidence_gaps %}
+      <ul>
+      {% for gap in ai_section.evidence_gaps %}
+        <li>{{ gap }}</li>
+      {% endfor %}
+      </ul>
+      {% else %}
+      <p>AI 未标记额外证据缺口，仍需研发人员按证据卡复核。</p>
+      {% endif %}
+      <h3>支撑证据</h3>
+      {% if ai_section.supporting_evidence_refs %}
+      <table>
+        <thead><tr><th>材料ID</th><th>证据卡ID</th><th>摘录/位置</th></tr></thead>
+        <tbody>
+        {% for ref in ai_section.supporting_evidence_refs %}
+        <tr>
+          <td><span class="tag mono">{{ ref.material_id }}</span></td>
+          <td><span class="tag mono">{{ ref.evidence_card_id }}</span></td>
+          <td>{{ ref.excerpt }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p><span class="tag warn">证据缺口</span>该 AI 章节没有可追溯材料引用。</p>
+      {% endif %}
+    {% else %}
+    {% if cards_by_section[section] %}
+      <h3>事实</h3>
+      {% for card in cards_by_section[section] %}
+      <article class="record">
+        <div class="card-header"><h3>{{ card.title }}</h3></div>
+        <p><span class="tag">{{ card.material_type_zh or card.material_type }}</span><span class="tag">{{ card.evidence_strength_zh or card.evidence_strength }}</span><span class="tag mono">{{ card.material_id }}</span></p>
+        <p>{{ card.summary }}</p>
+      </article>
+      {% endfor %}
+      <h3>分析</h3>
+      <div class="insight">以上内容为已提交证据卡的事实摘要；本节结论需要结合产品定义、注册路径和实验条件复核。</div>
+      <h3>证据缺口</h3>
+      <p>如本节证据强度为 needs_review 或摘录不足，应补充权威来源、原文位置或人工确认记录。</p>
+      <h3>支撑证据</h3>
+      {% for card in cards_by_section[section] %}
+      <article class="record">
+        <h4>{{ card.title }}</h4>
+        <p><span class="tag mono">{{ card.material_id }}</span><span class="tag">{{ card.evidence_strength }}</span></p>
+        {% if card.key_excerpts %}
+        <table>
+          <thead><tr><th>关键摘录</th><th>位置</th></tr></thead>
+          <tbody>
+          {% for excerpt in card.key_excerpts %}
+          <tr><td>{{ excerpt.text }}</td><td>{{ excerpt.location }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p><span class="tag warn">证据缺口</span>该证据卡缺少关键摘录，不能直接支撑结论。</p>
+        {% endif %}
+      </article>
+      {% endfor %}
+    {% else %}
+      <h3>事实</h3>
+      <p><span class="tag warn">证据缺口</span>当前没有已提交证据卡支撑本节事实。</p>
+      <h3>分析</h3>
+      <div class="insight danger">本节不能写成确定性结论；只能说明当前材料不足，需要补充检索或人工确认。</div>
+      <h3>证据缺口</h3>
+      <p>缺少可引用材料、关键摘录和证据强度评估。</p>
+      <h3>支撑证据</h3>
+      <p>暂无可列示支撑证据。</p>
+    {% endif %}
+    {% endif %}
+  </section>
+  {% endfor %}
+</main>
+</body>
+</html>

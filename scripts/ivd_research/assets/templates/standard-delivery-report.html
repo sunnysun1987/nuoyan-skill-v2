@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ report_title }}</title>
+  <style>{{ css }}</style>
+</head>
+{% macro render_screening_card(card, anchor_prefix="") -%}
+<article id="{{ anchor_prefix }}{{ card.evidence_anchor }}" class="card filter-card"
+  data-priority="{{ card.data_priority }}"
+  data-stage="{{ card.data_stage }}"
+  data-sample="{{ card.data_sample }}"
+  data-platform="{{ card.data_platform }}"
+  data-reference="{{ card.data_reference }}"
+  data-use="{{ card.data_use }}"
+  data-population="{{ card.data_population }}"
+  data-markers="{{ card.data_markers }}"
+  data-metrics="{{ card.data_metrics }}"
+  data-region="{{ card.data_region }}"
+  data-evidence="{{ card.data_evidence_types }}"
+  data-text="{{ card.data_text }}">
+  <div class="card-head">
+    <div>
+      <div class="card-id">{{ card.screening_id }} / {{ card.card_id }}</div>
+      <h3>
+        {% if card.source_url %}
+        <a href="{{ card.source_url }}" target="_blank" rel="noopener noreferrer">{{ card.display_title }}</a>
+        {% else %}
+        {{ card.display_title }}
+        {% endif %}
+      </h3>
+      {% if card.show_original_title %}
+      <p class="card-original-title">英文原题：{{ card.title_original }}</p>
+      {% endif %}
+      <p class="card-source">{{ card.journal }}{% if card.authors %} · {{ card.authors }}{% endif %}</p>
+    </div>
+    <div class="card-meta">
+      <span class="priority {{ card.priority_class }}">{{ card.priority_label }}</span>
+      <span class="year">{{ card.year }}</span>
+    </div>
+  </div>
+
+  <div class="tag-row">
+    {% for tag in card.stage + card.sample + card.platform + card.reference + card.use + card.evidence_types %}
+    <span class="tag">{{ tag }}</span>
+    {% endfor %}
+  </div>
+
+  <div class="card-block">
+    <h4>证据卡摘要</h4>
+    <ul class="fact-list">
+      {% for line in card.summary_lines %}
+      <li>{{ line }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  {% if card.excerpt_blocks %}
+  <details class="card-details">
+    <summary>关键摘录 / Abstract</summary>
+    {% for block in card.excerpt_blocks %}
+    <div class="reading-block">
+      <div class="reading-label">{{ block.label }}</div>
+      {% for paragraph in block.paragraphs %}
+      <p>{{ paragraph }}</p>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </details>
+  {% endif %}
+
+  {% if card.translation_items %}
+  <details class="card-details translation-details">
+    <summary>专业中文阅读</summary>
+    {% for item in card.translation_items %}
+    <div class="translation-item {{ item.status }}">
+      <div class="translation-label">{{ item.label }}{% if item.status == "engine_not_ready" or item.status == "not_configured" %} · 翻译引擎未就绪{% elif item.status != "completed" %} · 待生成{% endif %}</div>
+      {% if item.paragraphs %}
+      {% for paragraph in item.paragraphs %}
+      <p>{{ paragraph }}</p>
+      {% endfor %}
+      {% else %}
+      <p>{{ item.text }}</p>
+      {% endif %}
+      {% if item.note %}<p class="muted">{{ item.note }}</p>{% endif %}
+    </div>
+    {% endfor %}
+  </details>
+  {% endif %}
+
+  {% if card.review_points %}
+  <details class="card-details">
+    <summary>待复核点</summary>
+    <ul class="fact-list">
+      {% for point in card.review_points %}
+      <li>{{ point }}</li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+</article>
+{%- endmacro %}
+<body>
+<main>
+  <header class="page-header">
+    <h1>{{ report_title }}</h1>
+    <p class="meta"><span>任务ID：{{ task_id }}</span><span>生成时间：{{ generated_at }}</span><span>技能：诺研_skill</span><span>代码版本：{{ workflow_version }}</span></p>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="研发筛选报告页签">
+    <button class="tab active" type="button" data-tab-target="tab-analysis">项目分析</button>
+    <button class="tab" type="button" data-tab-target="tab-reading">研发阅读入口</button>
+    <button class="tab" type="button" data-tab-target="tab-metrics">指标事实</button>
+    <button class="tab" type="button" data-tab-target="tab-core">核心必读文献</button>
+    <button class="tab" type="button" data-tab-target="tab-screening">全部证据卡</button>
+    <button class="tab" type="button" data-tab-target="tab-gaps">资料缺口</button>
+  </nav>
+
+  <div class="workspace">
+      <section class="tab-panel active" id="tab-analysis">
+        <div class="analysis-layout">
+          <aside class="analysis-toc-panel">
+            <div class="analysis-toc-head">
+              <div>
+                <div class="toc-eyebrow">项目分析</div>
+                <h2>章节目录</h2>
+              </div>
+              <p>共 {{ project_analysis_sections|length }} 个判断问题，点击后跳转到对应章节。</p>
+            </div>
+            <div class="analysis-toc-grid">
+            {% for section in project_analysis_sections %}
+              <a class="analysis-nav-card" href="#{{ section.id }}" aria-label="查看{{ section.title }}">
+                <span class="nav-index">{{ "%02d"|format(loop.index) }}</span>
+                <span class="nav-title">{{ section.title }}</span>
+              </a>
+            {% endfor %}
+            </div>
+          </aside>
+          <div class="analysis-stack">
+            {% for section in project_analysis_sections %}
+            <article class="analysis-card" id="{{ section.id }}">
+              <h2>{{ section.title }}</h2>
+              {% if section.facts %}
+              <div class="analysis-block analysis-facts">
+                <h3>事实证据</h3>
+                <ul class="fact-list">
+                  {% for fact in section.facts %}
+                  <li>{{ fact }}</li>
+                  {% endfor %}
+                </ul>
+              </div>
+              {% endif %}
+              <div class="analysis-block">
+                <h3>分析</h3>
+                <p>{{ section.analysis }}</p>
+              </div>
+              {% if section.evidence_strength_label or section.confidence_level %}
+              <div class="analysis-assurance" aria-label="证据强度和复核状态">
+                {% if section.evidence_strength_label %}<span>证据强度：{{ section.evidence_strength_label }}</span>{% endif %}
+                {% if section.confidence_level %}<span>可信度：{{ section.confidence_level }}</span>{% endif %}
+                <span>{{ section.review_status }}</span>
+              </div>
+              {% endif %}
+              <div class="analysis-block">
+                <h3>支撑证据</h3>
+                <p>{{ section.evidence }}</p>
+                {% if section.evidence_rows %}
+                <div class="analysis-evidence-panel" data-page-size="8">
+                  <div class="analysis-evidence-toolbar">
+                    <div>
+                      <strong>依据清单</strong>
+                      <span>{{ section.evidence_rows|length }} 条可追溯材料</span>
+                    </div>
+                    <div class="analysis-pager">
+                      <button class="pager-button" type="button" data-page-action="prev" aria-label="上一页依据">上一页</button>
+                      <span class="page-status" data-page-status>1 / 1</span>
+                      <button class="pager-button" type="button" data-page-action="next" aria-label="下一页依据">下一页</button>
+                    </div>
+                  </div>
+                  <div class="analysis-page-range" data-page-range></div>
+                  <div class="analysis-evidence-table-wrap">
+                  <table class="analysis-evidence-table">
+                    <thead><tr><th>原文标题</th><th>相关内容原文</th><th>证据卡</th></tr></thead>
+                    <tbody>
+                      {% for row in section.evidence_rows %}
+                      <tr data-page-row>
+                        <td>
+                          {% if row.material_href %}
+                          <a href="{{ row.material_href }}" target="_blank" rel="noopener noreferrer">{{ row.material_title }}</a>
+                          {% else %}
+                          {{ row.material_title }}
+                          {% endif %}
+                        </td>
+                        <td>{{ row.excerpt }}</td>
+                        <td><button class="inline-jump" type="button" data-jump-tab="tab-screening" data-jump-target="{{ row.evidence_card_anchor }}">{{ row.evidence_card_id }}</button></td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                  </div>
+                </div>
+                {% else %}
+                <div class="empty-state compact">当前章节尚未匹配到可直接引用的依据清单，请结合资料缺口和全部证据卡继续人工复核。</div>
+                {% endif %}
+              </div>
+              <div class="analysis-block gap">
+                <h3>待确认事项 / 下一步补证</h3>
+                {% if section.gaps %}
+                <ul class="fact-list">
+                  {% for gap in section.gaps %}
+                  <li>{{ gap }}</li>
+                  {% endfor %}
+                </ul>
+                {% else %}
+                <p>{{ section.gap }}</p>
+                {% endif %}
+              </div>
+            </article>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-reading">
+        <div class="metric-grid compact">
+          <button class="metric-card metric-link" type="button" data-jump-tab="tab-reading" data-jump-target="evidence-map" aria-label="查看已登记材料说明和证据地图">
+            <div class="metric-top"><div class="value">{{ registered_material_count }}</div><div class="metric-arrow">查看</div></div>
+            <div class="label">已登记材料</div>
+            <p class="metric-definition">已写入材料库的原始资料总数，含文献、法规、竞品、标准、专利和本地导入材料。</p>
+          </button>
+          <button class="metric-card metric-link" type="button" data-jump-tab="tab-screening" data-jump-target="screening-card-list" aria-label="查看筛选证据卡">
+            <div class="metric-top"><div class="value">{{ screening_summary.total }}</div><div class="metric-arrow">查看</div></div>
+            <div class="label">筛选证据卡</div>
+            <p class="metric-definition">由材料抽取、去重并进入研发筛选工作台的证据卡数量。</p>
+          </button>
+          <button class="metric-card metric-link" type="button" data-jump-tab="tab-core" data-jump-target="core-card-list" aria-label="查看核心必读文献">
+            <div class="metric-top"><div class="value info">{{ screening_summary.core }}</div><div class="metric-arrow">查看</div></div>
+            <div class="label">核心必读</div>
+            <p class="metric-definition">优先级为 A 的高价值证据卡，建议研发、医学和注册人员先复核。</p>
+          </button>
+          <button class="metric-card metric-link" type="button" data-jump-tab="tab-gaps" data-jump-target="gap-workbench" aria-label="查看受限场景和资料缺口">
+            <div class="metric-top"><div class="value warn">{{ failed_scenarios|length }}</div><div class="metric-arrow">查看</div></div>
+            <div class="label">受限场景</div>
+            <p class="metric-definition">因未命中、登录、权限、站点限制或需人工复核而不能直接形成完整证据的来源场景。</p>
+          </button>
+          <button class="metric-card metric-link" type="button" data-jump-tab="tab-metrics" data-jump-target="metric-facts" aria-label="查看指标事实明细">
+            <div class="metric-top"><div class="value info">{{ knowledge_status.metric_fact_count }}</div><div class="metric-arrow">查看</div></div>
+            <div class="label">指标事实</div>
+            <p class="metric-definition">从证据中结构化抽取的样本量、灵敏度、特异性、AUC、Ct、LoD、OR/HR 等参数事实。</p>
+          </button>
+        </div>
+
+        <div class="reading-grid">
+          <section class="decision-card expert-decision-card">
+            <h2>先看结论</h2>
+            <div class="decision-verdict">
+              <span class="status-pill info">{{ expert_decision.confidence }}可信度</span>
+              <strong>{{ expert_decision.go_no_go }}</strong>
+            </div>
+            <p>{{ expert_decision.judgement }}</p>
+            <dl class="decision-list">
+              <div><dt>研发定位</dt><dd>{{ expert_decision.positioning }}</dd></div>
+              <div><dt>验证重点</dt><dd>{{ expert_decision.validation_focus }}</dd></div>
+              <div><dt>证据读数</dt><dd>{{ expert_decision.evidence_readout }}</dd></div>
+              <div><dt>下一关口</dt><dd>{{ expert_decision.next_gate }}</dd></div>
+            </dl>
+          </section>
+          <section class="decision-card">
+            <h2>怎么读这份报告</h2>
+            <ol class="plain-list">
+              <li>先看“项目分析”，确认这个项目为什么值得做、能用在哪、还缺什么。</li>
+              <li>再看“核心必读文献”，优先复核 A 类证据，不要从全部材料里盲找。</li>
+              <li>最后用“全部证据卡”按样本、方法学、参照、性能指标和证据类型筛选。</li>
+            </ol>
+          </section>
+        </div>
+
+        <section class="section-card flat" id="evidence-map">
+          <h2>证据地图</h2>
+          <table>
+            <thead><tr><th>证据域</th><th>材料数</th><th>采集状态</th><th>业务用途</th></tr></thead>
+            <tbody>
+              {% for row in evidence_map %}
+              <tr>
+                <td>{{ row.name }}</td>
+                <td>{{ row.count }}</td>
+                <td><span class="status-pill {{ row.level }}">{{ row.status }}</span></td>
+                <td>{{ row.use }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </section>
+
+        <section class="section-card flat">
+          <h2>当前不能直接下结论的事项</h2>
+          <ul class="fact-list">
+            {% for item in business_decision.cannot_conclude %}
+            <li>{{ item }}</li>
+            {% endfor %}
+          </ul>
+        </section>
+
+        <section class="section-card flat">
+          <h2>补证任务</h2>
+          <table class="gap-table">
+            <thead><tr><th>证据缺口</th><th>当前依据</th><th>还缺什么</th><th>影响</th><th>责任角色</th><th>验收口径</th></tr></thead>
+            <tbody>
+              {% for row in gap_rows %}
+              <tr>
+                <td>{{ row.gap }}</td>
+                <td>{{ row.current_basis }}</td>
+                <td>{{ row.missing_evidence }}</td>
+                <td>{{ row.impact }}</td>
+                <td>{{ row.owner }}</td>
+                <td>{{ row.acceptance }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </section>
+      </section>
+
+      <section class="tab-panel" id="tab-metrics">
+        <section class="section-card flat metric-facts-workbench" id="metric-facts">
+          <h2>指标事实</h2>
+          <p class="section-note">以下为系统从材料和证据卡中抽取的参数事实，用于快速定位性能、样本量和统计结果。当前展示 {{ metric_facts|length }} / {{ metric_fact_total }} 条；正式引用前仍需回到原文或证据卡复核。</p>
+          <div class="metric-filter-panel">
+            <label class="metric-search-box">
+              <span>组合查询</span>
+              <input id="metric-global-search" type="search" placeholder="输入指标、数值、材料标题、证据卡、样本、平台或原文关键词">
+            </label>
+            <div class="metric-filter-grid">
+              <label><span>指标字段</span><input type="search" data-metric-filter="metric" placeholder="如 检出灵敏度"></label>
+              <label><span>数值字段</span><input type="search" data-metric-filter="value" placeholder="如 99% / 0.92"></label>
+              <label><span>材料标题</span><input type="search" data-metric-filter="material" placeholder="输入原文标题关键词"></label>
+              <label><span>证据卡</span><input type="search" data-metric-filter="card" placeholder="如 EC-000008"></label>
+              <label><span>样本类型</span><input type="search" data-metric-filter="sample" placeholder="如 鼻咽拭子"></label>
+              <label><span>平台/方法</span><input type="search" data-metric-filter="platform" placeholder="如 RT-PCR"></label>
+            </div>
+            <div class="metric-filter-status"><span id="metric-visible-count">{{ metric_facts|length }}</span> / {{ metric_facts|length }} 条匹配</div>
+          </div>
+          {% if metric_facts %}
+          <table class="metric-fact-table">
+            <thead><tr><th>指标字段</th><th>数值字段</th><th>材料</th><th>证据卡</th><th>样本/平台/参照</th><th>相关内容原文</th></tr></thead>
+            <tbody>
+              {% for fact in metric_facts %}
+              <tr class="metric-fact-row"
+                data-metric="{{ fact.metric_type_zh }} {{ fact.metric_type }}"
+                data-value="{{ fact.value }}"
+                data-material="{{ fact.material_title }} {{ fact.material_id }}"
+                data-card="{{ fact.evidence_card_id }} {{ fact.evidence_card_title }}"
+                data-sample="{{ fact.sample_type }}"
+                data-platform="{{ fact.platform }} {{ fact.reference_standard }}"
+                data-search="{{ fact.search_text }}">
+                <td><strong>{{ fact.metric_type_zh }}</strong><span>{{ fact.metric_explanation }}</span></td>
+                <td><strong>{{ fact.value }}</strong><span>{{ fact.value_explanation }}</span></td>
+                <td>
+                  {% if fact.material_href %}
+                  <a href="{{ fact.material_href }}" target="_blank" rel="noopener noreferrer">{{ fact.material_title }}</a>
+                  {% else %}
+                  {{ fact.material_title }}
+                  {% endif %}
+                </td>
+                <td><button class="inline-jump" type="button" data-jump-tab="tab-screening" data-jump-target="{{ fact.evidence_card_anchor }}">{{ fact.evidence_card_id }}</button></td>
+                <td>
+                  <div>样本：{{ fact.sample_type }}</div>
+                  <div>平台：{{ fact.platform }}</div>
+                  <div>参照：{{ fact.reference_standard }}</div>
+                </td>
+                <td>{{ fact.excerpt }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <div class="empty-state">当前知识资产中尚未抽取到可展示的指标事实。</div>
+          {% endif %}
+        </section>
+      </section>
+
+      <section class="tab-panel" id="tab-core">
+        <div class="screening-workbench">
+          <aside class="filters" aria-label="核心必读筛选">
+            <div class="filter-head">
+              <div class="filter-title">核心筛选</div>
+              <div class="filter-count"><span class="visible-card-count">{{ core_cards|length }}</span> / {{ core_cards|length }}</div>
+            </div>
+            <input class="filter-search" type="search" placeholder="搜索核心文献标题、摘要、平台、指标">
+
+            {% for group in core_filter_groups %}
+            <div class="filter-group" data-filter-group="{{ group.key }}">
+              <div class="filter-title">{{ group.label }}</div>
+              <div class="chip-row">
+                {% for option in group.options %}
+                <button class="chip" type="button" data-filter-key="{{ group.key }}" data-filter-value="{{ option.value }}">{{ option.value }} <span>{{ option.count }}</span></button>
+                {% endfor %}
+              </div>
+            </div>
+            {% endfor %}
+          </aside>
+          <div class="screening-results">
+            <div class="section-intro">
+              <h2>核心必读文献</h2>
+              <p>这里优先放 A 类证据。它们通常带有性能参数、全文/摘要追溯、注册/标准/竞品价值或可直接支撑研发判断。</p>
+            </div>
+            <div id="core-card-list" class="card-list">
+              {% for card in core_cards %}
+              {{ render_screening_card(card, "core-") }}
+              {% endfor %}
+              {% if not core_cards %}
+              <div class="empty-state danger">当前没有可进入核心必读的证据卡。</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-screening">
+        <div class="screening-workbench">
+          <aside class="filters" aria-label="证据筛选">
+            <div class="filter-head">
+              <div class="filter-title">证据筛选</div>
+              <div class="filter-count"><span id="visible-card-count">{{ screening_summary.total }}</span> / {{ screening_summary.total }}</div>
+            </div>
+            <input id="global-card-search" class="filter-search" type="search" placeholder="搜索标题、摘要、平台、指标">
+
+            {% for group in filter_groups %}
+            <div class="filter-group" data-filter-group="{{ group.key }}">
+              <div class="filter-title">{{ group.label }}</div>
+              <div class="chip-row">
+                {% for option in group.options %}
+                <button class="chip" type="button" data-filter-key="{{ group.key }}" data-filter-value="{{ option.value }}">{{ option.value }} <span>{{ option.count }}</span></button>
+                {% endfor %}
+              </div>
+            </div>
+            {% endfor %}
+          </aside>
+          <div class="screening-results">
+            <div class="section-intro">
+              <h2>全部证据卡</h2>
+              <p>按左侧标签组合筛选。多个维度同时选择时，只显示同时满足条件的证据卡。</p>
+            </div>
+            <div id="screening-card-list" class="card-list">
+              {% for card in screening_cards %}
+              {{ render_screening_card(card) }}
+              {% endfor %}
+              {% if not screening_cards %}
+              <div class="empty-state danger">当前没有证据卡。必须先形成真实材料并生成证据卡，才能支撑项目判断。</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-gaps">
+        <div class="section-intro">
+          <h2>资料缺口</h2>
+          <p>{{ collection_gap_summary.headline }}</p>
+          <div class="insight warn">优先处理责任角色：{{ collection_gap_summary.priority_text }}</div>
+        </div>
+        <div class="metric-grid compact">
+          <div class="metric-card"><div class="value warn">{{ collection_gap_summary.gap_count }}</div><div class="label">未补齐缺口</div></div>
+          <div class="metric-card"><div class="value info">{{ collection_gap_summary.fallback_covered_count }}</div><div class="label">已兜底待复核</div></div>
+          <div class="metric-card"><div class="value danger">{{ source_quality.high_count }}</div><div class="label">疑似假阴性</div></div>
+          <div class="metric-card"><div class="value">{{ registered_material_count }}</div><div class="label">已登记材料</div></div>
+          <div class="metric-card"><div class="value">{{ excluded_material_count }}</div><div class="label">相关性排除</div></div>
+        </div>
+        {% if source_quality.issue_count %}
+        <div class="quality-audit-panel">
+          <h3>采集质量审计</h3>
+          <p>{{ source_quality.headline }}</p>
+          <div class="quality-audit-list">
+            {% for issue in source_quality.issues %}
+            <article class="quality-audit-item">
+              <div class="gap-card-head">
+                <span class="status-pill {{ issue.status_level }}">{{ "高风险" if issue.severity == "high" else "需复核" }}</span>
+                <span class="owner-pill">{{ issue.source }}</span>
+              </div>
+              <p><b>发现</b>：{{ issue.finding }}</p>
+              <p><b>依据</b>：{{ issue.evidence }}</p>
+              <p><b>建议</b>：{{ issue.recommendation }}</p>
+            </article>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+        <div class="quality-audit-panel">
+          <h3>研究论证完整性</h3>
+          <p>
+            已登记 {{ research_integrity.claim_count }} 条研究论断、
+            {{ research_integrity.conflict_count }} 条证据冲突；
+            当前状态：{{ "已通过" if research_integrity.ready else "待补充或复核" }}。
+          </p>
+          {% if research_integrity.issues %}
+          <div class="quality-audit-list">
+            {% for issue in research_integrity.issues %}
+            <article class="quality-audit-item">
+              <div class="gap-card-head">
+                <span class="status-pill {{ 'danger' if issue.severity == 'high' else 'warn' }}">{{ "高风险" if issue.severity == "high" else "需复核" }}</span>
+                <span class="owner-pill">{{ issue.issue_type }}</span>
+              </div>
+              <p><b>发现</b>：{{ issue.finding }}</p>
+              <p><b>建议</b>：{{ issue.recommendation }}</p>
+            </article>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="empty-state compact">研究论断、证据关联、冲突处理和迭代饱和检查均已通过。</div>
+          {% endif %}
+        </div>
+        <div class="gap-card-grid" id="gap-workbench">
+          {% for row in collection_gap_rows %}
+          <article class="gap-card">
+            <div class="gap-card-head">
+              <span class="status-pill {{ row.status_level }}">{{ row.status }}</span>
+              <span class="owner-pill">{{ row.owner }}</span>
+            </div>
+            <h3>{{ row.source }}</h3>
+            <p><b>缺口</b>：{{ row.missing }}</p>
+            <p><b>影响</b>：{{ row.impact }}</p>
+            <p><b>处理建议</b>：{{ row.action }}</p>
+          </article>
+          {% endfor %}
+          {% if not collection_gap_rows %}
+          <div class="empty-state">当前未识别到需要单独处理的资料缺口。</div>
+          {% endif %}
+        </div>
+        {% if excluded_materials %}
+        <div class="quality-audit-panel">
+          <h3>项目相关性排除记录</h3>
+          <p>以下材料保留在原始材料库中，但不参与当前项目分析。请人工复核排除理由，避免材料静默消失。</p>
+          <table>
+            <thead><tr><th>材料</th><th>来源</th><th>排除理由</th><th>匹配信号</th></tr></thead>
+            <tbody>
+              {% for row in excluded_materials %}
+              <tr>
+                <td>
+                  {% if row.source_url %}<a href="{{ row.source_url }}" target="_blank" rel="noopener noreferrer">{{ row.title }}</a>{% else %}{{ row.title }}{% endif %}
+                  <div class="muted">{{ row.material_id }}</div>
+                </td>
+                <td>{{ row.source }}</td>
+                <td>{{ row.reason }}</td>
+                <td>{{ row.matches or "无" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </section>
+  </div>
+</main>
+
+<script>
+  function activateTab(target) {
+    const button = document.querySelector(`.tab[data-tab-target="${target}"]`);
+    const panel = document.getElementById(target);
+    if (!button || !panel) return false;
+    document.querySelectorAll(".tab").forEach((item) => item.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach((item) => item.classList.remove("active"));
+    button.classList.add("active");
+    panel.classList.add("active");
+    updateVisibleCount();
+    return true;
+  }
+
+  document.querySelectorAll(".tab").forEach((button) => {
+    button.addEventListener("click", () => activateTab(button.getAttribute("data-tab-target")));
+  });
+
+  document.querySelectorAll("[data-jump-tab]").forEach((item) => {
+    item.addEventListener("click", () => {
+      const targetTab = item.getAttribute("data-jump-tab");
+      const targetId = item.getAttribute("data-jump-target");
+      activateTab(targetTab);
+      window.setTimeout(() => {
+        const target = targetId ? document.getElementById(targetId) : document.getElementById(targetTab);
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
+          target.classList.add("jump-highlight");
+          window.setTimeout(() => target.classList.remove("jump-highlight"), 1600);
+        }
+      }, 30);
+    });
+  });
+
+  function applyMetricFilters() {
+    const globalQuery = normalizeText(document.getElementById("metric-global-search")?.value || "");
+    const fieldQueries = {};
+    document.querySelectorAll("[data-metric-filter]").forEach((input) => {
+      fieldQueries[input.getAttribute("data-metric-filter")] = normalizeText(input.value || "");
+    });
+    const rows = Array.from(document.querySelectorAll(".metric-fact-row"));
+    let visible = 0;
+    rows.forEach((row) => {
+      const globalText = normalizeText(row.getAttribute("data-search") || row.innerText);
+      const globalMatch = !globalQuery || globalText.includes(globalQuery);
+      const fieldMatch = Object.entries(fieldQueries).every(([key, query]) => {
+        if (!query) return true;
+        return normalizeText(row.getAttribute(`data-${key}`) || "").includes(query);
+      });
+      row.hidden = !(globalMatch && fieldMatch);
+      if (!row.hidden) visible += 1;
+    });
+    const count = document.getElementById("metric-visible-count");
+    if (count) count.textContent = visible;
+  }
+
+  document.querySelectorAll("#metric-global-search, [data-metric-filter]").forEach((input) => {
+    input.addEventListener("input", applyMetricFilters);
+  });
+
+  function initAnalysisEvidencePagination() {
+    document.querySelectorAll(".analysis-evidence-panel").forEach((panel) => {
+      const rows = Array.from(panel.querySelectorAll("[data-page-row]"));
+      const pageSize = Math.max(1, Number.parseInt(panel.getAttribute("data-page-size") || "8", 10));
+      const status = panel.querySelector("[data-page-status]");
+      const range = panel.querySelector("[data-page-range]");
+      const prev = panel.querySelector('[data-page-action="prev"]');
+      const next = panel.querySelector('[data-page-action="next"]');
+      if (!rows.length) return;
+      let page = 0;
+      const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+
+      function renderPage() {
+        const start = page * pageSize;
+        const end = Math.min(start + pageSize, rows.length);
+        rows.forEach((row, index) => {
+          row.hidden = index < start || index >= end;
+        });
+        if (status) status.textContent = `${page + 1} / ${totalPages}`;
+        if (range) range.textContent = `当前显示第 ${start + 1}-${end} 条，共 ${rows.length} 条`;
+        if (prev) prev.disabled = page === 0;
+        if (next) next.disabled = page >= totalPages - 1;
+      }
+
+      prev?.addEventListener("click", () => {
+        if (page > 0) {
+          page -= 1;
+          renderPage();
+        }
+      });
+      next?.addEventListener("click", () => {
+        if (page < totalPages - 1) {
+          page += 1;
+          renderPage();
+        }
+      });
+      renderPage();
+    });
+  }
+
+  function normalizeText(value) {
+    return (value || "").toString().toLowerCase().replace(/\s+/g, " ").trim();
+  }
+
+  function cardMatchesFilter(card, key, values) {
+    if (!values || values.length === 0) return true;
+    const haystack = normalizeText(card.getAttribute(`data-${key}`));
+    return values.some((value) => haystack.includes(normalizeText(value)));
+  }
+
+  function updateVisibleCount() {
+    const activePanel = document.querySelector(".tab-panel.active");
+    const cards = activePanel ? Array.from(activePanel.querySelectorAll(".filter-card")) : [];
+    const visible = cards.filter((card) => !card.hidden).length;
+    const counter = activePanel ? activePanel.querySelector(".visible-card-count, #visible-card-count") : null;
+    if (counter) counter.textContent = cards.length ? visible : counter.textContent;
+  }
+
+  function applyPanelFilters(panel) {
+    if (!panel) return;
+    const query = normalizeText(panel.querySelector(".filter-search")?.value || "");
+    const selectedByKey = {};
+    panel.querySelectorAll(".chip.active").forEach((chip) => {
+      const key = chip.getAttribute("data-filter-key");
+      const value = chip.getAttribute("data-filter-value");
+      selectedByKey[key] = selectedByKey[key] || [];
+      selectedByKey[key].push(value);
+    });
+    panel.querySelectorAll(".filter-card").forEach((card) => {
+      const textMatch = !query || normalizeText(card.getAttribute("data-text") + " " + card.innerText).includes(query);
+      const filterMatch = Object.entries(selectedByKey).every(([key, values]) => cardMatchesFilter(card, key, values));
+      card.hidden = !(textMatch && filterMatch);
+    });
+    updateVisibleCount();
+  }
+
+  document.querySelectorAll(".chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      chip.classList.toggle("active");
+      applyPanelFilters(chip.closest(".tab-panel"));
+    });
+  });
+
+  document.querySelectorAll(".filter-search").forEach((input) => {
+    input.addEventListener("input", () => applyPanelFilters(input.closest(".tab-panel")));
+  });
+
+  initAnalysisEvidencePagination();
+  updateVisibleCount();
+</script>
+</body>
+</html>
