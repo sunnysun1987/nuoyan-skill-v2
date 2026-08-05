@@ -64,6 +64,36 @@ PUBMED_XML = """<?xml version="1.0"?>
 """
 
 
+PUBMED_XML_WITH_REFERENCE_IDS = """<?xml version="1.0"?>
+<PubmedArticleSet>
+  <PubmedArticle>
+    <MedlineCitation>
+      <PMID>39462403</PMID>
+      <Article>
+        <Journal><Title>Journal of Nanobiotechnology</Title></Journal>
+        <ArticleTitle>S-RBD-modified engineered exosomes attenuate radiation-induced lung injury</ArticleTitle>
+      </Article>
+    </MedlineCitation>
+    <PubmedData>
+      <ArticleIdList>
+        <ArticleId IdType="doi">10.1186/s12951-024-02830-9</ArticleId>
+        <ArticleId IdType="pmc">PMC11511118</ArticleId>
+      </ArticleIdList>
+      <ReferenceList>
+        <Reference>
+          <Citation>An unrelated cited article.</Citation>
+          <ArticleIdList>
+            <ArticleId IdType="doi">10.1001/jama.2020.1585</ArticleId>
+            <ArticleId IdType="pmc">PMC6218514</ArticleId>
+          </ArticleIdList>
+        </Reference>
+      </ReferenceList>
+    </PubmedData>
+  </PubmedArticle>
+</PubmedArticleSet>
+"""
+
+
 PMC_XML = """<?xml version="1.0"?>
 <pmc-articleset>
   <article>
@@ -147,6 +177,14 @@ def test_parse_pubmed_articles_extracts_evidence_fields():
     assert "12345678" in formatted
     assert "Similar articles" in formatted
     assert "87654321" in formatted
+
+
+def test_parse_pubmed_articles_ignores_reference_identifiers():
+    article = parse_pubmed_articles(PUBMED_XML_WITH_REFERENCE_IDS)[0]
+
+    assert article["pmid"] == "39462403"
+    assert article["doi"] == "10.1186/s12951-024-02830-9"
+    assert article["pmcid"] == "PMC11511118"
 
 
 def test_evidence_card_markdown_contains_translation_and_parameters(tmp_path: Path):

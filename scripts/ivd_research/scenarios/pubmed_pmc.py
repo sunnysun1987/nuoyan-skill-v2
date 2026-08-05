@@ -482,7 +482,7 @@ def parse_pubmed_articles(xml_text: str) -> list[dict[str, Any]]:
         pub_date = _pubmed_date(article_node)
         doi = ""
         pmcid = ""
-        for id_node in article_node.findall(".//ArticleIdList/ArticleId"):
+        for id_node in article_node.findall("./PubmedData/ArticleIdList/ArticleId"):
             id_type = (id_node.attrib.get("IdType") or "").lower()
             value = _node_text(id_node)
             if id_type == "doi":
