@@ -5,6 +5,7 @@ from ivd_research.browser_collect import collect_patenthub_visible_results
 from ivd_research.browser_workflows import classify_browser_page
 from ivd_research.scenarios.patenthub_patents import (
     build_patenthub_material,
+    collect,
     parse_patenthub_detail,
     parse_patenthub_result_list,
 )
@@ -105,6 +106,25 @@ def test_patenthub_login_copy_is_classified_as_needs_login():
     )
 
     assert result["status"] == "needs_login"
+
+
+def test_patenthub_http_restriction_records_executable_browser_fallback(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(
+        "ivd_research.scenarios.site_collect.fetch_html",
+        lambda url: (LOGIN_HTML, "https://www.patenthub.cn/login?reason=blocked", 200),
+    )
+
+    result = collect(
+        task_id="TASK-001",
+        task_dir=tmp_path,
+        params={"query": "甲型流感", "material_id": "MAT-000001"},
+    )
+
+    assert result.status == "needs_login"
+    assert "open-browser-session" in result.message_zh
+    assert "重新运行 PatentHub 采集" in result.message_zh
 
 
 def test_patenthub_detail_failure_is_not_reported_as_no_results():

@@ -26,7 +26,7 @@ def adapter():
 
 def collect(task_id, task_dir, params):
     failure_modes = ("collection_failed", "no_results")
-    return collect_search_snapshot(
+    result = collect_search_snapshot(
         task_id=task_id,
         task_dir=task_dir,
         params=params,
@@ -37,6 +37,13 @@ def collect(task_id, task_dir, params):
         no_result_markers=["没有找到", "暂无数据"],
         validation_rules=["专利条目包含标题、公开号或基本信息", *failure_modes],
     )
+    if result.status in {"needs_login", "permission_required"}:
+        result.message_zh = (
+            f"{result.message_zh} 兜底动作：运行 open-browser-session "
+            "--scenario patenthub_patents --background，完成登录或真人验证后，"
+            "重新运行 PatentHub 采集。"
+        )
+    return result
 
 
 def parse_patenthub_result_list(html: str, base_url: str) -> list[dict[str, Any]]:
