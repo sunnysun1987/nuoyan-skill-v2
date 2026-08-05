@@ -206,6 +206,8 @@ V2.1.3 fixes the plugin bridge so source database names such as `EFO/OLS` are st
 
 ## Tests
 
+Code changes and releases must follow the [development and release checklist](docs/development-release-checklist.md). It covers bad-case regression, serial task-state writes, real-project replay, installed-skill parity and GitHub release boundaries.
+
 Run deterministic tests without depending on live public networks:
 
 ```bash
