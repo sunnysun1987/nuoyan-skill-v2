@@ -413,6 +413,7 @@ def _merge_plan_results(results: list[ScenarioResult], attempts: list[dict]) -> 
             failure_type=FailureType.COLLECTION_FAILED,
             message_zh=(
                 f"{message} 采集通道存在访问或解析失败，不能判定未发现结果。"
+                "兜底动作：先重试当前检索；仍失败时改用浏览器或人工补证。"
             ),
             collection_errors=collection_errors,
         )

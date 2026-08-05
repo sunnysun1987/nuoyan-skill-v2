@@ -154,6 +154,7 @@ def test_merge_plan_results_does_not_turn_transport_failures_into_no_results():
     assert merged.status == FailureType.COLLECTION_FAILED.value
     assert merged.failure_type == FailureType.COLLECTION_FAILED
     assert "不能判定未发现结果" in merged.message_zh
+    assert "浏览器或人工补证" in merged.message_zh
 
 
 def _hcg_confirmations() -> dict:
